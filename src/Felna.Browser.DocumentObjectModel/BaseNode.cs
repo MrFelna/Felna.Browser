@@ -4,11 +4,11 @@ namespace Felna.Browser.DocumentObjectModel;
 
 public abstract class BaseNode : IDocumentNode
 {
-    protected List<IDocumentNode> _childNodes = new();
+    protected IList<IDocumentNode> ChildNodeList { get; } = new List<IDocumentNode>();
     
     public IDocumentNode? ParentNode { get; init; }
     
-    public IReadOnlyList<IDocumentNode> ChildNodes => _childNodes.AsReadOnly();
+    public IReadOnlyList<IDocumentNode> ChildNodes => ChildNodeList.AsReadOnly();
     
     public abstract string NodeName { get; }
 }
