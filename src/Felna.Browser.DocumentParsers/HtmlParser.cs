@@ -2,9 +2,9 @@
 
 namespace Felna.Browser.DocumentParsers;
 
-public class HtmlParser
+public sealed class HtmlParser
 {
-    public DocumentNode Parse(string html)
+    public static DocumentNode Parse(string html)
     {
         var document = new DocumentNode();
 
