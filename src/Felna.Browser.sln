@@ -2,6 +2,8 @@
 Microsoft Visual Studio Solution File, Format Version 12.00
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Felna.Browser.DocumentObjectModel", "Felna.Browser.DocumentObjectModel\Felna.Browser.DocumentObjectModel.csproj", "{AB1D5C25-72AA-4744-B721-B5C311AF627F}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Felna.Browser.DocumentParsers", "Felna.Browser.DocumentParsers\Felna.Browser.DocumentParsers.csproj", "{02043F4F-DAD5-466C-861A-D97875110609}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -12,5 +14,9 @@ Global
 		{AB1D5C25-72AA-4744-B721-B5C311AF627F}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{AB1D5C25-72AA-4744-B721-B5C311AF627F}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{AB1D5C25-72AA-4744-B721-B5C311AF627F}.Release|Any CPU.Build.0 = Release|Any CPU
+		{02043F4F-DAD5-466C-861A-D97875110609}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{02043F4F-DAD5-466C-861A-D97875110609}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{02043F4F-DAD5-466C-861A-D97875110609}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{02043F4F-DAD5-466C-861A-D97875110609}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 EndGlobal
