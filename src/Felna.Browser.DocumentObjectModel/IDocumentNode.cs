@@ -2,7 +2,7 @@
 
 public interface IDocumentNode
 {
-    IDocumentNode? ParentNode { get; }
+    IDocumentNode? ParentNode { get; init; }
     IDocumentNodeList ChildNodes { get; }
     public string NodeName { get; }
 }
