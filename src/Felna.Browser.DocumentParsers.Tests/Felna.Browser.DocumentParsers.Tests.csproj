@@ -25,4 +25,9 @@
         <PackageReference Include="coverlet.collector" Version="3.2.0" />
     </ItemGroup>
 
+    <ItemGroup>
+      <ProjectReference Include="..\Felna.Browser.DocumentObjectModel\Felna.Browser.DocumentObjectModel.csproj" />
+      <ProjectReference Include="..\Felna.Browser.DocumentParsers\Felna.Browser.DocumentParsers.csproj" />
+    </ItemGroup>
+
 </Project>

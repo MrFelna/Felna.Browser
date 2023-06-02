@@ -11,4 +11,9 @@ public abstract class BaseNode : IDocumentNode
     public IReadOnlyList<IDocumentNode> ChildNodes => ChildNodeList.AsReadOnly();
     
     public abstract string NodeName { get; }
+
+    public void AppendNode(IDocumentNode node)
+    {
+        ChildNodeList.Add(node);
+    }
 }

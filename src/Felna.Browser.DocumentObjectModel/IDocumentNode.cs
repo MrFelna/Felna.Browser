@@ -7,4 +7,5 @@ public interface IDocumentNode
     IDocumentNode? ParentNode { get; init; }
     IReadOnlyList<IDocumentNode> ChildNodes { get; }
     public string NodeName { get; }
+    void AppendNode(IDocumentNode node);
 }
