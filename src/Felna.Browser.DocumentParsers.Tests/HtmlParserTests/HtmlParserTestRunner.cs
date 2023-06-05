@@ -1,4 +1,5 @@
 ﻿using System.Reflection;
+using System.Text;
 
 namespace Felna.Browser.DocumentParsers.Tests.HtmlParserTests;
 
@@ -6,8 +7,12 @@ internal static class HtmlParserTestRunner
 {
     internal static void Run(string input, DocumentNode expectedResult)
     {
+        // arrange
+        var utf8Bytes = Encoding.UTF8.GetBytes(input);
+        var stream = new MemoryStream(utf8Bytes);
+        
         // act
-        var actual = HtmlParser.Parse(input);
+        var actual = HtmlParser.Parse(stream, Encoding.UTF8.GetDecoder());
         
         // assert
         
