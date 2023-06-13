@@ -4,7 +4,6 @@ namespace Felna.Browser.DocumentParsers.Tests.HtmlTokenGeneratorTests;
 
 public class TestStreamConsumer : IStreamConsumer
 {
-    private const char UnrepresentableChar = (char)0xfffd;
     private readonly string _source;
     
     private int _currentCharIndex;
@@ -17,7 +16,7 @@ public class TestStreamConsumer : IStreamConsumer
     public (bool Success, char character) TryGetCurrentChar()
     {
         if (_currentCharIndex >= _source.Length)
-            return (false, UnrepresentableChar);
+            return (false, CharacterReference.UnrepresentableChar);
 
         return (true, _source[_currentCharIndex]);
     }

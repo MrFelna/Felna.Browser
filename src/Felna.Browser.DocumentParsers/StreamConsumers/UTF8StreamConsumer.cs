@@ -4,7 +4,6 @@ namespace Felna.Browser.DocumentParsers.StreamConsumers;
 
 internal class UTF8StreamConsumer : IStreamConsumer
 {
-    private const char UnrepresentableChar = (char)0xfffd;
     private readonly List<char> _charList = new List<char>();
     private readonly Decoder _decoder = Encoding.UTF8.GetDecoder();
     private readonly Stream _stream;
@@ -20,7 +19,7 @@ internal class UTF8StreamConsumer : IStreamConsumer
     public (bool Success, char character) TryGetCurrentChar()
     {
         if (!ReadUntil(_currentCharIndex))
-            return (false, UnrepresentableChar);
+            return (false, CharacterReference.UnrepresentableChar);
             
         return (true, _charList[_currentCharIndex]);
     }
@@ -65,7 +64,7 @@ internal class UTF8StreamConsumer : IStreamConsumer
     private (bool Success, char character) TryReadNextCharacter()
     {
         if (_endOfStream)
-            return (false, UnrepresentableChar);
+            return (false, CharacterReference.UnrepresentableChar);
         
         int byteAsInt;
         var nextChar = new char[1];
@@ -80,6 +79,6 @@ internal class UTF8StreamConsumer : IStreamConsumer
 
         _endOfStream = true;
 
-        return (false, UnrepresentableChar);
+        return (false, CharacterReference.UnrepresentableChar);
     }
 }
