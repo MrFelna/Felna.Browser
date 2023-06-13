@@ -1,4 +1,5 @@
 ﻿using System.Text;
+using Felna.Browser.DocumentParsers.TextReferences;
 
 namespace Felna.Browser.DocumentParsers.StreamConsumers;
 

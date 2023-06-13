@@ -1,4 +1,4 @@
-﻿namespace Felna.Browser.DocumentParsers;
+﻿namespace Felna.Browser.DocumentParsers.TextReferences;
 
 internal static class StringReference
 {
