@@ -19,7 +19,7 @@ internal class UTF8StreamConsumer : IStreamConsumer
     public (bool Success, char character) TryGetCurrentChar()
     {
         if (!ReadUntil(_currentCharIndex))
-            return (false, CharacterReference.UnrepresentableChar);
+            return (false, CharacterReference.ReplacementCharacter);
             
         return (true, _charList[_currentCharIndex]);
     }
@@ -64,7 +64,7 @@ internal class UTF8StreamConsumer : IStreamConsumer
     private (bool Success, char character) TryReadNextCharacter()
     {
         if (_endOfStream)
-            return (false, CharacterReference.UnrepresentableChar);
+            return (false, CharacterReference.ReplacementCharacter);
         
         int byteAsInt;
         var nextChar = new char[1];
@@ -79,6 +79,6 @@ internal class UTF8StreamConsumer : IStreamConsumer
 
         _endOfStream = true;
 
-        return (false, CharacterReference.UnrepresentableChar);
+        return (false, CharacterReference.ReplacementCharacter);
     }
 }

@@ -16,7 +16,7 @@ public class TestStreamConsumer : IStreamConsumer
     public (bool Success, char character) TryGetCurrentChar()
     {
         if (_currentCharIndex >= _source.Length)
-            return (false, CharacterReference.UnrepresentableChar);
+            return (false, CharacterReference.ReplacementCharacter);
 
         return (true, _source[_currentCharIndex]);
     }
