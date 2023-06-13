@@ -21,7 +21,7 @@ public static class HtmlTokenGeneratorTestRunner
 
         for (var i = 0; i < actual.Count; i++)
         {
-            Assert.AreEqual(expectedTokens[i], actual[i]);
+            Assert.IsTrue(expectedTokens[i].AreValueEqual(actual[i]));
         }
     }
 }
