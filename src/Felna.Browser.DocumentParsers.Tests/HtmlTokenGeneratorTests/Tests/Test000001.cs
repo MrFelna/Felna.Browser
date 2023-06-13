@@ -1,4 +1,6 @@
-﻿namespace Felna.Browser.DocumentParsers.Tests.HtmlTokenGeneratorTests.Tests;
+﻿using Felna.Browser.DocumentParsers.HtmlTokens;
+
+namespace Felna.Browser.DocumentParsers.Tests.HtmlTokenGeneratorTests.Tests;
 
 [TestClass]
 public class Test000001

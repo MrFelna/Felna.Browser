@@ -1,6 +1,6 @@
 ﻿using System.Text;
 
-namespace Felna.Browser.DocumentParsers;
+namespace Felna.Browser.DocumentParsers.HtmlTokens;
 
 internal static class HtmlTokenGenerator
 {

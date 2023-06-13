@@ -1,4 +1,5 @@
 ﻿using System.Text;
+using Felna.Browser.DocumentParsers.HtmlTokens;
 
 namespace Felna.Browser.DocumentParsers.Tests.HtmlTokenGeneratorTests;
 
