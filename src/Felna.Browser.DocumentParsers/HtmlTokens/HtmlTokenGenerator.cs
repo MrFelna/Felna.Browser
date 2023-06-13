@@ -1,11 +1,26 @@
 ﻿using System.Text;
+using Felna.Browser.DocumentParsers.StreamConsumers;
 
 namespace Felna.Browser.DocumentParsers.HtmlTokens;
 
-internal static class HtmlTokenGenerator
+internal class HtmlTokenGenerator
 {
-    internal static IEnumerable<HtmlToken> TokenizeStream(Stream stream, Decoder decoder)
+    private readonly IStreamConsumer _streamConsumer;
+
+    internal HtmlTokenGenerator(IStreamConsumer streamConsumer)
     {
-        return Array.Empty<HtmlToken>();
+        _streamConsumer = streamConsumer;
+    }
+
+    internal HtmlToken GetNextToken() => GetDataToken();
+
+    private HtmlToken GetDataToken()
+    {
+        var (success, character) = _streamConsumer.TryGetCurrentChar();
+        
+        if (!success)
+            return new EndOfFileToken();
+
+        return new CharacterToken {Data = new string(character, 1)};
     }
 }

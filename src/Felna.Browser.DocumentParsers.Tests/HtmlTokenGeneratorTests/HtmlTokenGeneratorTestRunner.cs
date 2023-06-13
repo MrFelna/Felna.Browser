@@ -9,19 +9,25 @@ public static class HtmlTokenGeneratorTestRunner
     internal static void Run(string input, IReadOnlyList<HtmlToken> expectedTokens)
     {
         // arrange
-        var utf8Bytes = Encoding.UTF8.GetBytes(input);
-        var stream = new MemoryStream(utf8Bytes);
-        
+        var streamConsumer = new TestStreamConsumer(input);
+        var tokenGenerator = new HtmlTokenGenerator(streamConsumer);
+        var tokens = new List<HtmlToken>();
         
         // act
-        var actual = HtmlTokenGenerator.TokenizeStream(stream, Encoding.UTF8.GetDecoder()).ToList();
+        while (tokens.Count <= expectedTokens.Count)
+        {
+            var nextToken = tokenGenerator.GetNextToken();
+            tokens.Add(nextToken);
+            if (nextToken is EndOfFileToken)
+                break;
+        }
         
         // assert
-        Assert.AreEqual(expectedTokens.Count, actual.Count);
+        Assert.AreEqual(expectedTokens.Count, tokens.Count);
 
-        for (var i = 0; i < actual.Count; i++)
+        for (var i = 0; i < tokens.Count; i++)
         {
-            Assert.IsTrue(expectedTokens[i].AreValueEqual(actual[i]));
+            Assert.IsTrue(expectedTokens[i].AreValueEqual(tokens[i]));
         }
     }
 }
