@@ -33,11 +33,6 @@ public class TestStreamConsumer : IStreamConsumer
         return (true, _source.Substring(_currentCharIndex, charCount));
     }
 
-    public bool EndOfStream()
-    {
-        return _currentCharIndex >= _source.Length;
-    }
-
     public void ConsumeChar(int charCount = 1)
     {
         if (charCount < 1)

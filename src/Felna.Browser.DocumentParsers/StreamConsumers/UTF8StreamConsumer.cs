@@ -9,7 +9,7 @@ internal class UTF8StreamConsumer : IStreamConsumer
     private readonly Decoder _decoder = Encoding.UTF8.GetDecoder();
     private readonly Stream _stream;
     
-    private bool _endOfStream;
+    private bool _sourceStreamExhausted;
     private int _currentCharIndex;
 
     internal UTF8StreamConsumer(Stream stream)
@@ -38,8 +38,6 @@ internal class UTF8StreamConsumer : IStreamConsumer
         return (true, new string(chars));
     }
 
-    public bool EndOfStream() => _endOfStream;
-
     public void ConsumeChar(int charCount = 1)
     {
         if (charCount < 1)
@@ -52,34 +50,40 @@ internal class UTF8StreamConsumer : IStreamConsumer
     {
         while (_charList.Count <= charIndex)
         {
-            var (success, character) = TryReadNextCharacter();
+            var (success, characters) = TryReadNextCharacter();
             if (!success)
                 return false;
-            _charList.Add(character);
+            _charList.AddRange(characters);
         }
 
         return true;
     }
     
     // https://stackoverflow.com/a/11672355
-    private (bool Success, char character) TryReadNextCharacter()
+    private (bool Success, char[] characters) TryReadNextCharacter()
     {
-        if (_endOfStream)
-            return (false, CharacterReference.ReplacementCharacter);
+        if (_sourceStreamExhausted)
+            return (false, new [] { CharacterReference.ReplacementCharacter });
         
         int byteAsInt;
-        var nextChar = new char[1];
+        var nextChar = new char[2]; // need two to handle code points above \uFFFF
 
         while ((byteAsInt = _stream.ReadByte()) != -1)
         {
             var charCount = _decoder.GetChars(new[] {(byte) byteAsInt}, 0, 1, nextChar, 0);
-            if(charCount == 0) continue;
-
-            return (true, nextChar[0]);
+            switch (charCount)
+            {
+                case 0:
+                    continue;
+                case 1:
+                    return (true, nextChar[..1]); // Return an array of the single char
+                default:
+                    return (true, nextChar); // Return the array of two chars representing a code point above \uFFFF
+            }
         }
 
-        _endOfStream = true;
+        _sourceStreamExhausted = true;
 
-        return (false, CharacterReference.ReplacementCharacter);
+        return (false, new [] { CharacterReference.ReplacementCharacter });
     }
 }
