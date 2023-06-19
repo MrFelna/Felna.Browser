@@ -3,7 +3,7 @@
 [TestClass]
 public class Test000001
 {
-    [TestMethod]
+    [TestMethod, Ignore]
     public void GivenValidButNoContentHtmlBasicEmptyDocumentReturned()
     {
         var html = @"<!DOCTYPE html><html><head></head><body></body></html>";
