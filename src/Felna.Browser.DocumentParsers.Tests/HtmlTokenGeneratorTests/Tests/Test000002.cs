@@ -1,18 +1,14 @@
 ﻿namespace Felna.Browser.DocumentParsers.Tests.HtmlTokenGeneratorTests.Tests;
 
 [TestClass]
-public class Test000001
+public class Test000002
 {
     [TestMethod]
-    public void GivenValidButNoContentHtmlBasicEmptyDocumentReturnedThenEndOfFile()
+    public void GivenEmptyHtmlBasicOnlyEndOfFileReturned()
     {
-        const string html = @"<!DOCTYPE html>";
+        const string html = @"";
         var tokens = new List<HtmlToken>
         {
-            new DocTypeToken
-            {
-                Name = "html",
-            },
             new EndOfFileToken(),
         };
         

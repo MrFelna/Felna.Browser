@@ -57,7 +57,7 @@ internal class HtmlTokenGenerator
             return GetDocTypeToken();
         }
 
-        throw new NotImplementedException();
+        return GetBogusCommentToken();
     }
 
     private HtmlToken GetDocTypeToken()
@@ -106,6 +106,28 @@ internal class HtmlTokenGenerator
 
             if (!success)
                 return new DocTypeToken {ForceQuirks = true, Name = doctypeNameBuilder.ToString()};
+        }
+    }
+
+    private HtmlToken GetBogusCommentToken()
+    {
+        var commentDataBuilder = new StringBuilder();
+        while(true)
+        {
+            var (success, character) = _streamConsumer.TryGetCurrentChar();
+
+            if (!success)
+                return new CommentToken {Data = commentDataBuilder.ToString()};
+            
+            _streamConsumer.ConsumeChar();
+            
+            if (character == CharacterReference.GreaterThanSign)
+                return new CommentToken {Data = commentDataBuilder.ToString()};
+
+            if (character == CharacterReference.Null)
+                commentDataBuilder.Append(CharacterReference.ReplacementCharacter);
+            else
+                commentDataBuilder.Append(character);
         }
     }
 }
