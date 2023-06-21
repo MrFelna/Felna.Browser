@@ -88,7 +88,9 @@ internal class HtmlTokenGenerator
         while (true)
         {
             if (CharacterRangeReference.TokenWhiteSpace.Contains(character))
-                throw new NotImplementedException();
+            {
+                break;
+            }
 
             if (character == CharacterReference.GreaterThanSign)
             {
@@ -107,6 +109,24 @@ internal class HtmlTokenGenerator
             if (!success)
                 return new DocTypeToken {ForceQuirks = true, Name = doctypeNameBuilder.ToString()};
         }
+
+        // after DOCTYPE name state
+        while (CharacterRangeReference.TokenWhiteSpace.Contains(character))
+        {
+            _streamConsumer.ConsumeChar();
+            (success, character) = _streamConsumer.TryGetCurrentChar();
+
+            if (!success)
+                return new DocTypeToken {ForceQuirks = true, Name = doctypeNameBuilder.ToString()};
+        }
+        
+        if (character == CharacterReference.GreaterThanSign)
+        {
+            _streamConsumer.ConsumeChar();
+            return new DocTypeToken {Name = doctypeNameBuilder.ToString()};
+        }
+
+        throw new NotImplementedException();
     }
 
     private HtmlToken GetBogusCommentToken()
