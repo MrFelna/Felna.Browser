@@ -28,7 +28,7 @@ internal class HtmlTokenGenerator
             return GetTagOpenToken();
         }
 
-        return new CharacterToken {Data = new string(character, 1)};
+        throw new NotImplementedException();
     }
 
     private HtmlToken GetTagOpenToken()
@@ -43,13 +43,25 @@ internal class HtmlTokenGenerator
             _streamConsumer.ConsumeChar();
             return GetMarkupDeclarationOpenToken();
         }
-        
-        return new CharacterToken {Data = new string(CharacterReference.LessThanSign, 1)};
+
+        throw new NotImplementedException();
     }
 
     private HtmlToken GetMarkupDeclarationOpenToken()
     {
-        var (success, result) = _streamConsumer.LookAhead(StringReference.DocType.Length);
+        var (success, result) = _streamConsumer.LookAhead(2);
+
+        if (success && result == "--")
+        {
+            throw new NotImplementedException("Comment start");
+        }
+        
+        (success, result) = _streamConsumer.LookAhead(StringReference.DocType.Length);
+
+        if (success && result == "[CDATA[")
+        {
+            throw new NotImplementedException("possible cdata section state");
+        }
 
         if (success && StringReference.AsciiCaseInsensitiveEquals(result, StringReference.DocType))
         {
