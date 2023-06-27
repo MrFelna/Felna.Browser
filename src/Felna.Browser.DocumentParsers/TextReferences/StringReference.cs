@@ -3,6 +3,10 @@
 internal static class StringReference
 {
     internal const string DocType = "DOCTYPE";
+    
+    internal const string Public = "public";
+    
+    internal const string System = "system";
 
     // Can this be replaced by string.Equals(x, y, StringComparison.OrdinalIgnoreCase)? 
     internal static bool AsciiCaseInsensitiveEquals(string x, string y)

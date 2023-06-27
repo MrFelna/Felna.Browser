@@ -138,7 +138,30 @@ internal class HtmlTokenGenerator
             return new DocTypeToken {Name = doctypeNameBuilder.ToString()};
         }
 
-        throw new NotImplementedException();
+        (success, var result) = _streamConsumer.LookAhead(StringReference.System.Length);
+
+        if (success && StringReference.AsciiCaseInsensitiveEquals(result, StringReference.System))
+        {
+            throw new NotImplementedException();
+        }
+        else if (success && StringReference.AsciiCaseInsensitiveEquals(result, StringReference.Public))
+        {
+            throw new NotImplementedException();
+        }
+        else
+        {
+            // bogus DOCTYPE state
+            var docTypeToken = new DocTypeToken {Name = doctypeNameBuilder.ToString()};
+            do
+            {
+                (success, character) = _streamConsumer.TryGetCurrentChar();
+                if (!success)
+                    return docTypeToken;
+                _streamConsumer.ConsumeChar();
+                if (character == CharacterReference.GreaterThanSign)
+                    return docTypeToken;
+            } while (true);
+        }
     }
 
     private HtmlToken GetBogusCommentToken()
