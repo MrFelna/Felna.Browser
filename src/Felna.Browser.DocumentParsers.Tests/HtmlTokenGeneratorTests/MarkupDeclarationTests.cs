@@ -21,6 +21,7 @@ public class MarkupDeclarationTests
     [DataRow("<!DOCTYPE ht", @"[{""type"":""doctype"",""name"":""ht"",""forcequirks"":true}]")]
     [DataRow("<!DOCTYPE htm", @"[{""type"":""doctype"",""name"":""htm"",""forcequirks"":true}]")]
     [DataRow("<!DOCTYPE html", @"[{""type"":""doctype"",""name"":""html"",""forcequirks"":true}]")]
+    [DataRow("<!DOCTYPE html ", @"[{""type"":""doctype"",""name"":""html"",""forcequirks"":true}]")]
     [DataRow("<!DOCTYPE HTML>", @"[{""type"":""doctype"",""name"":""html""}]")]
     [DataRow("<!DOCTYPE html>", @"[{""type"":""doctype"",""name"":""html""}]")]
     [DataRow("<!doctype HTML>", @"[{""type"":""doctype"",""name"":""html""}]")]
