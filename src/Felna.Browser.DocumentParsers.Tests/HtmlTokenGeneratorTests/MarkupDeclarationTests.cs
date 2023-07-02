@@ -13,6 +13,10 @@ public class MarkupDeclarationTests
     [DataRow("<!DOCTYP", @"[{""type"":""comment"",""data"":""DOCTYP""}]")]
     [DataRow("<!DOCTYPE", @"[{""type"":""doctype"",""forcequirks"":true}]")]
     [DataRow("<!DOCTYPE ", @"[{""type"":""doctype"",""forcequirks"":true}]")]
+    [DataRow("<!DOCTYPE h", @"[{""type"":""doctype"",""name"":""h"",""forcequirks"":true}]")]
+    [DataRow("<!DOCTYPE ht", @"[{""type"":""doctype"",""name"":""ht"",""forcequirks"":true}]")]
+    [DataRow("<!DOCTYPE htm", @"[{""type"":""doctype"",""name"":""htm"",""forcequirks"":true}]")]
+    [DataRow("<!DOCTYPE html", @"[{""type"":""doctype"",""name"":""html"",""forcequirks"":true}]")]
     public void GivenHtmlCorrectTokensGenerated(string html, string json)
     {
         var tokens = HtmlTokenGeneratorTestRunner.ConvertJsonToTokens(json);
