@@ -1,4 +1,6 @@
-﻿namespace Felna.Browser.DocumentParsers.Tests.HtmlTokenGeneratorTests;
+﻿using Felna.Browser.DocumentParsers.TextReferences;
+
+namespace Felna.Browser.DocumentParsers.Tests.HtmlTokenGeneratorTests;
 
 [TestClass]
 public class MarkupDeclarationTests
@@ -11,6 +13,7 @@ public class MarkupDeclarationTests
     [DataRow("<!DOCT", @"[{""type"":""comment"",""data"":""DOCT""}]")]
     [DataRow("<!DOCTY", @"[{""type"":""comment"",""data"":""DOCTY""}]")]
     [DataRow("<!DOCTYP", @"[{""type"":""comment"",""data"":""DOCTYP""}]")]
+    [DataRow("<!DOC\u0000TYPE>", "[{\"type\":\"comment\",\"data\":\"DOC\ufffdTYPE\"}]")]
     [DataRow("<!DOCTYPE", @"[{""type"":""doctype"",""forcequirks"":true}]")]
     [DataRow("<!DOCTYPE>", @"[{""type"":""doctype"",""forcequirks"":true}]")]
     [DataRow("<!DOCTYPE ", @"[{""type"":""doctype"",""forcequirks"":true}]")]
