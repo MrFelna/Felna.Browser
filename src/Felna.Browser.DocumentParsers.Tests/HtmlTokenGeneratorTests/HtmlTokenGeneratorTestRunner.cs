@@ -10,24 +10,26 @@ public static class HtmlTokenGeneratorTestRunner
         // arrange
         var streamConsumer = new TestStreamConsumer(input);
         var tokenGenerator = new HtmlTokenGenerator(streamConsumer);
-        var tokens = new List<HtmlToken>();
-        var actual = new List<HtmlToken>(expectedTokens);
-        actual.Add(new EndOfFileToken());
-        actual.Add(new EndOfFileToken());
-        
+        var actual = new List<HtmlToken>();
+        var expected = new List<HtmlToken>(expectedTokens)
+        {
+            new EndOfFileToken(),
+            new EndOfFileToken()
+        };
+
         // act
-        while (tokens.Count < actual.Count)
+        while (actual.Count < expected.Count)
         {
             var nextToken = tokenGenerator.GetNextToken();
-            tokens.Add(nextToken);
+            actual.Add(nextToken);
         }
         
         // assert
-        Assert.AreEqual(actual.Count, tokens.Count);
+        Assert.AreEqual(expected.Count, actual.Count);
 
-        for (var i = 0; i < tokens.Count; i++)
+        for (var i = 0; i < actual.Count; i++)
         {
-            Assert.IsTrue(actual[i].AreValueEqual(tokens[i]));
+            Assert.IsTrue(expected[i].AreValueEqual(actual[i]));
         }
     }
 
@@ -50,7 +52,16 @@ public static class HtmlTokenGeneratorTestRunner
                 case "comment":
                     tokens.Add(new CommentToken
                     {
-                        Data = jObject["data"]?.Value<string>()
+                        Data = jObject["data"]?.Value<string>(),
+                    });
+                    break;
+                case "doctype":
+                    tokens.Add(new DocTypeToken
+                    {
+                        Name = jObject["name"]?.Value<string>(),
+                        ForceQuirks = jObject["forcequirks"]?.Value<bool>() ?? false,
+                        PublicIdentifier = jObject["publicidentifier"]?.Value<string>(),
+                        SystemIdentifier = jObject["systemidentifier"]?.Value<string>(),
                     });
                     break;
             }
