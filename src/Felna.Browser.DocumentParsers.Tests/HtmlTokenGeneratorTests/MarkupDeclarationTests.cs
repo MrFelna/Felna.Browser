@@ -12,6 +12,7 @@ public class MarkupDeclarationTests
     [DataRow("<!DOCTY", @"[{""type"":""comment"",""data"":""DOCTY""}]")]
     [DataRow("<!DOCTYP", @"[{""type"":""comment"",""data"":""DOCTYP""}]")]
     [DataRow("<!DOCTYPE", @"[{""type"":""doctype"",""forcequirks"":true}]")]
+    [DataRow("<!DOCTYPE>", @"[{""type"":""doctype"",""forcequirks"":true}]")]
     [DataRow("<!DOCTYPE ", @"[{""type"":""doctype"",""forcequirks"":true}]")]
     [DataRow("<!DOCTYPE h", @"[{""type"":""doctype"",""name"":""h"",""forcequirks"":true}]")]
     [DataRow("<!DOCTYPE ht", @"[{""type"":""doctype"",""name"":""ht"",""forcequirks"":true}]")]
