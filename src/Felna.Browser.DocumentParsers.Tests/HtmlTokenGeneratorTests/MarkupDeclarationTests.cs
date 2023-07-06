@@ -39,6 +39,10 @@ public class MarkupDeclarationTests
     [DataRow("<!doctype HTML >", @"[{""type"":""doctype"",""name"":""html""}]")]
     [DataRow("<!doctype html >", @"[{""type"":""doctype"",""name"":""html""}]")]
     [DataRow("<!DOCTYPE ht\u0000ml>", "[{\"type\":\"doctype\",\"name\":\"ht\ufffdml\"}]")]
+    [DataRow("<!doctype html test", @"[{""type"":""doctype"",""name"":""html""}]")]
+    [DataRow("<!doctype html test>", @"[{""type"":""doctype"",""name"":""html""}]")]
+    [DataRow("<!doctype html test >", @"[{""type"":""doctype"",""name"":""html""}]")]
+    [DataRow("<!doctype html test \u0000", @"[{""type"":""doctype"",""name"":""html""}]")]
     public void GivenHtmlCorrectTokensGenerated(string html, string json)
     {
         var tokens = HtmlTokenGeneratorTestRunner.ConvertJsonToTokens(json);
