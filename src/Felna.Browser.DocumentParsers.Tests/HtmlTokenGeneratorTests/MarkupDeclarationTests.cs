@@ -43,6 +43,17 @@ public class MarkupDeclarationTests
     [DataRow("<!doctype html test>", @"[{""type"":""doctype"",""name"":""html""}]")]
     [DataRow("<!doctype html test >", @"[{""type"":""doctype"",""name"":""html""}]")]
     [DataRow("<!doctype html test \u0000", @"[{""type"":""doctype"",""name"":""html""}]")]
+    [DataRow("<!doctype html public id", @"[{""type"":""doctype"",""name"":""html"",""forcequirks"":true}]")]
+    [DataRow("<!doctype html public", @"[{""type"":""doctype"",""name"":""html"",""forcequirks"":true}]")]
+    [DataRow("<!doctype html public>", @"[{""type"":""doctype"",""name"":""html"",""forcequirks"":true}]")]
+    [DataRow("<!doctype html public \"id\"", @"[{""type"":""doctype"",""name"":""html"",""publicidentifier"":""id"",""forcequirks"":true}]")]
+    [DataRow("<!doctype html public \"id\" ", @"[{""type"":""doctype"",""name"":""html"",""publicidentifier"":""id"",""forcequirks"":true}]")]
+    [DataRow("<!doctype html public \"id\">", @"[{""type"":""doctype"",""name"":""html"",""publicidentifier"":""id""}]")]
+    [DataRow("<!doctype html public \"id\" >", @"[{""type"":""doctype"",""name"":""html"",""publicidentifier"":""id""")]
+    [DataRow("<!doctype html public 'id'", @"[{""type"":""doctype"",""name"":""html"",""publicidentifier"":""id"",""forcequirks"":true}]")]
+    [DataRow("<!doctype html public 'id' ", @"[{""type"":""doctype"",""name"":""html"",""publicidentifier"":""id"",""forcequirks"":true}]")]
+    [DataRow("<!doctype html public 'id'>", @"[{""type"":""doctype"",""name"":""html"",""publicidentifier"":""id""}]")]
+    [DataRow("<!doctype html public 'id' >", @"[{""type"":""doctype"",""name"":""html"",""publicidentifier"":""id""")]
     public void GivenHtmlCorrectTokensGenerated(string html, string json)
     {
         var tokens = HtmlTokenGeneratorTestRunner.ConvertJsonToTokens(json);
