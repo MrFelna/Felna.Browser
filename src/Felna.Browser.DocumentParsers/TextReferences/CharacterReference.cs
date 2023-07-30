@@ -18,7 +18,11 @@ internal static class CharacterReference
     
     internal const char ExclamationMark = '\u0021';
     
+    internal const char QuotationMark = '\u0022';
+    
     internal const char Ampersand = '\u0026';
+    
+    internal const char Apostrophe = '\u0027';
 
     internal const char Digit0 = '\u0030';
     
