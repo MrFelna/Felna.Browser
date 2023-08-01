@@ -46,25 +46,29 @@ public static class HtmlTokenGeneratorTestRunner
             var jObject = (JObject) jToken;
 
             var type = jObject["type"];
-            
-            switch (type?.Value<string>())
+
+            HtmlToken? newToken = type?.Value<string>() switch
             {
-                case "comment":
-                    tokens.Add(new CommentToken
-                    {
-                        Data = jObject["data"]?.Value<string>(),
-                    });
-                    break;
-                case "doctype":
-                    tokens.Add(new DocTypeToken
-                    {
-                        Name = jObject["name"]?.Value<string>(),
-                        ForceQuirks = jObject["forcequirks"]?.Value<bool>() ?? false,
-                        PublicIdentifier = jObject["publicidentifier"]?.Value<string>(),
-                        SystemIdentifier = jObject["systemidentifier"]?.Value<string>(),
-                    });
-                    break;
-            }
+                "character" => new CharacterToken
+                {
+                    Data = jObject["data"]?.Value<string>(),
+                },
+                "comment" => new CommentToken
+                {
+                    Data = jObject["data"]?.Value<string>(),
+                },
+                "doctype" => new DocTypeToken
+                {
+                    Name = jObject["name"]?.Value<string>(),
+                    ForceQuirks = jObject["forcequirks"]?.Value<bool>() ?? false,
+                    PublicIdentifier = jObject["publicidentifier"]?.Value<string>(),
+                    SystemIdentifier = jObject["systemidentifier"]?.Value<string>(),
+                },
+                _ => null
+            };
+
+            if (newToken is not null)
+                tokens.Add(newToken);
         }
 
         return tokens.AsReadOnly();

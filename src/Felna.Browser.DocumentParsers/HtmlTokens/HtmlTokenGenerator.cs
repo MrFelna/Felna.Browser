@@ -44,6 +44,11 @@ internal class HtmlTokenGenerator
             return GetMarkupDeclarationOpenToken();
         }
 
+        if (character == CharacterReference.QuestionMark)
+        {
+            return GetBogusCommentToken();
+        }
+
         throw new NotImplementedException();
     }
 

@@ -32,6 +32,8 @@ internal static class CharacterReference
     
     internal const char GreaterThanSign = '\u003E';
     
+    internal const char QuestionMark = '\u003F';
+    
     internal const char UpperCaseA = '\u0041';
     
     internal const char UpperCaseZ = '\u005A';
