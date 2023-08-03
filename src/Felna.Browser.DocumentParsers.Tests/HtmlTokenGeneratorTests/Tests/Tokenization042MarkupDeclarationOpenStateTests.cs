@@ -6,6 +6,7 @@ public class Tokenization042MarkupDeclarationOpenStateTests
     [TestMethod]
     // TODO: Double Hyphen, CDATA
     [DataRow("<!DOCTYPE html>", @"[{""type"":""doctype"",""name"":""html""}]")]
+    [DataRow("<!doctype html>", @"[{""type"":""doctype"",""name"":""html""}]")]
     [DataRow("<!", @"[{""type"":""comment"",""data"":""""}]")]
     [DataRow("<!D", @"[{""type"":""comment"",""data"":""D""}]")]
     [DataRow("<!DO", @"[{""type"":""comment"",""data"":""DO""}]")]
