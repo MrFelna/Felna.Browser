@@ -14,7 +14,10 @@ public class Tokenization053DoctypeStateTests
     [DataRow("<!DOCTYPE\f html>", @"[{""type"":""doctype"",""name"":""html""}]")]
     [DataRow("<!DOCTYPE>", @"[{""type"":""doctype"",""forcequirks"":true}]")]
     [DataRow("<!DOCTYPE", @"[{""type"":""doctype"",""forcequirks"":true}]")]
+    [DataRow("<!DOCTYPEHTML>", @"[{""type"":""doctype"",""name"":""html""}]")]
     [DataRow("<!DOCTYPEhtml>", @"[{""type"":""doctype"",""name"":""html""}]")]
+    [DataRow("<!doctypeHTML>", @"[{""type"":""doctype"",""name"":""html""}]")]
+    [DataRow("<!doctypehtml>", @"[{""type"":""doctype"",""name"":""html""}]")]
     public void GivenHtmlCorrectTokensGenerated(string html, string json)
     {
         var tokens = HtmlTokenGeneratorTestRunner.ConvertJsonToTokens(json);
