@@ -4,9 +4,12 @@
 public class Tokenization042MarkupDeclarationOpenStateTests
 {
     [TestMethod]
-    // TODO: Double Hyphen, CDATA
+    // TODO: Double Hyphen
+    // ASCII case-insensitive DOCTYPE
     [DataRow("<!DOCTYPE html>", @"[{""type"":""doctype"",""name"":""html""}]")]
     [DataRow("<!doctype html>", @"[{""type"":""doctype"",""name"":""html""}]")]
+    // TODO: CDATA
+    // Anything else
     [DataRow("<!", @"[{""type"":""comment"",""data"":""""}]")]
     [DataRow("<!D", @"[{""type"":""comment"",""data"":""D""}]")]
     [DataRow("<!DO", @"[{""type"":""comment"",""data"":""DO""}]")]

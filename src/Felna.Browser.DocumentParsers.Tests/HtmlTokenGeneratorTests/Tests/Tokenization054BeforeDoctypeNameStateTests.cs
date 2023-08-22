@@ -4,14 +4,23 @@
 public class Tokenization054BeforeDoctypeNameStateTests
 {
     [TestMethod]
-    [DataRow("<!DOCTYPE ", @"[{""type"":""doctype"",""forcequirks"":true}]")]
-    [DataRow("<!DOCTYPE  html>", @"[{""type"":""doctype"",""name"":""html""}]")]
+    // Tab
     [DataRow("<!DOCTYPE \thtml>", @"[{""type"":""doctype"",""name"":""html""}]")]
+    // Line feed
     [DataRow("<!DOCTYPE \nhtml>", @"[{""type"":""doctype"",""name"":""html""}]")]
+    // Form feed
     [DataRow("<!DOCTYPE \fhtml>", @"[{""type"":""doctype"",""name"":""html""}]")]
-    [DataRow("<!DOCTYPE \u0000html>", "[{\"type\":\"doctype\",\"name\":\"\ufffdhtml\"}]")]
-    [DataRow("<!DOCTYPE >", @"[{""type"":""doctype"",""forcequirks"":true}]")]
+    // Space
+    [DataRow("<!DOCTYPE  html>", @"[{""type"":""doctype"",""name"":""html""}]")]
+    // ASCII upper alpha
     [DataRow("<!DOCTYPE HTML>", @"[{""type"":""doctype"",""name"":""html""}]")]
+    // NULL
+    [DataRow("<!DOCTYPE \u0000html>", "[{\"type\":\"doctype\",\"name\":\"\ufffdhtml\"}]")]
+    // Greater than sign
+    [DataRow("<!DOCTYPE >", @"[{""type"":""doctype"",""forcequirks"":true}]")]
+    // EOF
+    [DataRow("<!DOCTYPE ", @"[{""type"":""doctype"",""forcequirks"":true}]")]
+    // Anything else
     [DataRow("<!DOCTYPE html>", @"[{""type"":""doctype"",""name"":""html""}]")]
     public void GivenHtmlCorrectTokensGenerated(string html, string json)
     {

@@ -4,16 +4,23 @@
 public class Tokenization053DoctypeStateTests
 {
     [TestMethod]
-    [DataRow("<!DOCTYPE html>", @"[{""type"":""doctype"",""name"":""html""}]")]
+    // Tab
     [DataRow("<!DOCTYPE\thtml>", @"[{""type"":""doctype"",""name"":""html""}]")]
-    [DataRow("<!DOCTYPE\nhtml>", @"[{""type"":""doctype"",""name"":""html""}]")]
-    [DataRow("<!DOCTYPE\fhtml>", @"[{""type"":""doctype"",""name"":""html""}]")]
-    [DataRow("<!DOCTYPE \thtml>", @"[{""type"":""doctype"",""name"":""html""}]")]
     [DataRow("<!DOCTYPE\t\nhtml>", @"[{""type"":""doctype"",""name"":""html""}]")]
+    // Line feed
+    [DataRow("<!DOCTYPE\nhtml>", @"[{""type"":""doctype"",""name"":""html""}]")]
     [DataRow("<!DOCTYPE\n\fhtml>", @"[{""type"":""doctype"",""name"":""html""}]")]
+    // Form feed
+    [DataRow("<!DOCTYPE\fhtml>", @"[{""type"":""doctype"",""name"":""html""}]")]
     [DataRow("<!DOCTYPE\f html>", @"[{""type"":""doctype"",""name"":""html""}]")]
+    // Space
+    [DataRow("<!DOCTYPE html>", @"[{""type"":""doctype"",""name"":""html""}]")]
+    [DataRow("<!DOCTYPE \thtml>", @"[{""type"":""doctype"",""name"":""html""}]")]
+    // Greater than sign
     [DataRow("<!DOCTYPE>", @"[{""type"":""doctype"",""forcequirks"":true}]")]
+    // EOF
     [DataRow("<!DOCTYPE", @"[{""type"":""doctype"",""forcequirks"":true}]")]
+    // Anything else
     [DataRow("<!DOCTYPEHTML>", @"[{""type"":""doctype"",""name"":""html""}]")]
     [DataRow("<!DOCTYPEhtml>", @"[{""type"":""doctype"",""name"":""html""}]")]
     [DataRow("<!doctypeHTML>", @"[{""type"":""doctype"",""name"":""html""}]")]
