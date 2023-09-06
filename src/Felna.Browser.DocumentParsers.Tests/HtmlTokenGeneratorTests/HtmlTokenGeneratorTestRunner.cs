@@ -1,4 +1,6 @@
-﻿using Newtonsoft.Json.Linq;
+﻿using System.Reflection;
+using Newtonsoft.Json;
+using Newtonsoft.Json.Linq;
 
 namespace Felna.Browser.DocumentParsers.Tests.HtmlTokenGeneratorTests;
 
@@ -25,12 +27,54 @@ public static class HtmlTokenGeneratorTestRunner
         }
         
         // assert
-        Assert.AreEqual(expected.Count, actual.Count);
+        var assertMessage = $"Expected {GetTokenTypeList(expected)} - Actual {GetTokenTypeList(actual)}";
+        Assert.AreEqual(expected.Count, actual.Count, assertMessage);
 
         for (var i = 0; i < actual.Count; i++)
         {
-            Assert.IsTrue(expected[i].AreValueEqual(actual[i]));
+            TestAreEqual(expected[i], actual[i]);
         }
+    }
+
+    private static void TestAreEqual(HtmlToken expectedToken, HtmlToken actualToken)
+    {
+        var expectedType = expectedToken.GetType();
+        Assert.AreEqual(expectedType, actualToken.GetType());
+
+        var properties = expectedType.GetProperties(BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic);
+        foreach (var property in properties.Where(p => p.Name != nameof(HtmlToken.TokenAttributes)))
+        {
+            Assert.AreEqual(property.GetValue(expectedToken), property.GetValue(actualToken), $"Property {property.Name} differs for {expectedType.Name}");
+        }
+
+        var expectedAttributes = expectedToken.TokenAttributes
+            .OrderBy(ta => ta.Name?.ToUpperInvariant())
+            .ThenBy(ta => ta.Value?.ToUpperInvariant())
+            .ToList();
+
+        var actualAttributes = expectedToken.TokenAttributes
+            .OrderBy(ta => ta.Name?.ToUpperInvariant())
+            .ThenBy(ta => ta.Value?.ToUpperInvariant())
+            .ToList();
+            
+        var message = $"Expected {GetTokenAttributeList(expectedAttributes)} - Actual {GetTokenAttributeList(actualAttributes)} for {expectedType.Name}";
+        Assert.AreEqual(expectedToken.TokenAttributes.Count, actualToken.TokenAttributes.Count, message);
+
+        for (var i = 0; i < expectedAttributes.Count; i++)
+        {
+            Assert.AreEqual(expectedAttributes[i].Name, actualAttributes[i].Name, message);
+            Assert.AreEqual(expectedAttributes[i].Value, actualAttributes[i].Value, message);
+        }
+    }
+
+    private static string GetTokenTypeList(IEnumerable<HtmlToken> tokens)
+    {
+        return string.Join(',', tokens.Select(t => t.GetType().Name));
+    }
+    
+    private static string GetTokenAttributeList(IEnumerable<HtmlTokenAttribute> attributes)
+    {
+        return string.Join(',', attributes.Select(ta => ta.Name + ":" + ta.Value));
     }
 
     internal static IEnumerable<HtmlToken> ConvertJsonToTokens(string json)
