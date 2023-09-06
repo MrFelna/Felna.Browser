@@ -196,6 +196,12 @@ internal class HtmlTokenGenerator
                             return new DocTypeToken {Name = doctypeName, PublicIdentifier = publicIdentifier, ForceQuirks = true};
                         if (character == publicIdQuoteChar)
                             break;
+                        if (character == CharacterReference.GreaterThanSign)
+                        {
+                            _streamConsumer.ConsumeChar();
+                            return new DocTypeToken {Name = doctypeName, PublicIdentifier = publicIdentifier, ForceQuirks = true};
+                        }
+
                         if (character == CharacterReference.Null)
                         {
                             publicIdentifier += CharacterReference.ReplacementCharacter;
