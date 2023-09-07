@@ -1,7 +1,7 @@
 ﻿namespace Felna.Browser.DocumentParsers.Tests.HtmlTokenGeneratorTests.Tests;
 
 [TestClass]
-public class Tokenization059DoctypePublicIdentifierStateTests
+public class Tokenization059DoctypePublicIdentifierDoubleQuotedStateTests
 {
     [TestMethod]
     // Quotation mark
@@ -15,6 +15,7 @@ public class Tokenization059DoctypePublicIdentifierStateTests
     [DataRow("<!doctype html public \"pid", @"[{""type"":""doctype"",""name"":""html"",""publicidentifier"":""pid"",""forcequirks"":true}]")]
     // Anything else
     [DataRow("<!doctype html public \"pid\">", @"[{""type"":""doctype"",""name"":""html"",""publicidentifier"":""pid""}]")]
+    [DataRow("<!doctype html public \"p'id\">", @"[{""type"":""doctype"",""name"":""html"",""publicidentifier"":""p'id""}]")]
     public void GivenHtmlCorrectTokensGenerated(string html, string json)
     {
         var tokens = HtmlTokenGeneratorTestRunner.ConvertJsonToTokens(json);
