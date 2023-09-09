@@ -267,41 +267,44 @@ internal class HtmlTokenGenerator
                     return new DocTypeToken {Name = doctypeName, ForceQuirks = true};
             }
 
-            if (character == CharacterReference.GreaterThanSign)
+            switch (character)
             {
-                _streamConsumer.ConsumeChar();
-                return new DocTypeToken {Name = doctypeName, ForceQuirks = true};
-            }
-
-            if (character is CharacterReference.QuotationMark or CharacterReference.Apostrophe)
-            {
-                var systemIdQuoteChar = character;
-                systemIdentifier = "";
-
-                do
+                case CharacterReference.GreaterThanSign:
+                    _streamConsumer.ConsumeChar();
+                    return new DocTypeToken {Name = doctypeName, ForceQuirks = true};
+                case CharacterReference.QuotationMark or CharacterReference.Apostrophe:
                 {
+                    var systemIdQuoteChar = character;
+                    systemIdentifier = "";
+
+                    do
+                    {
+                        _streamConsumer.ConsumeChar();
+                        (success, character) = _streamConsumer.TryGetCurrentChar();
+
+                        if (!success)
+                            return new DocTypeToken {Name = doctypeName, PublicIdentifier = publicIdentifier, SystemIdentifier = systemIdentifier, ForceQuirks = true};
+                        if (character == systemIdQuoteChar)
+                            break;
+                        if (character == CharacterReference.Null)
+                        {
+                            systemIdentifier += CharacterReference.ReplacementCharacter;
+                        }
+                        else
+                        {
+                            systemIdentifier += character;
+                        }
+                    } while (true);
+
                     _streamConsumer.ConsumeChar();
                     (success, character) = _streamConsumer.TryGetCurrentChar();
 
                     if (!success)
                         return new DocTypeToken {Name = doctypeName, PublicIdentifier = publicIdentifier, SystemIdentifier = systemIdentifier, ForceQuirks = true};
-                    if (character == systemIdQuoteChar)
-                        break;
-                    if (character == CharacterReference.Null)
-                    {
-                        systemIdentifier += CharacterReference.ReplacementCharacter;
-                    }
-                    else
-                    {
-                        systemIdentifier += character;
-                    }
-                } while (true);
-
-                _streamConsumer.ConsumeChar();
-                (success, character) = _streamConsumer.TryGetCurrentChar();
-
-                if (!success)
-                    return new DocTypeToken {Name = doctypeName, PublicIdentifier = publicIdentifier, SystemIdentifier = systemIdentifier, ForceQuirks = true};
+                    break;
+                }
+                default:
+                    return GetBogusDoctypeToken(doctypeName, forceQuirks: true);
             }
         }
         
