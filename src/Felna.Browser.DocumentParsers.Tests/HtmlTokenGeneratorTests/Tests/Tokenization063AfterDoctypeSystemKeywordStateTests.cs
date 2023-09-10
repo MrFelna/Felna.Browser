@@ -19,7 +19,7 @@ public class Tokenization063AfterDoctypeSystemKeywordStateTests
     // Greater than sign
     [DataRow("<!doctype html system>", @"[{""type"":""doctype"",""name"":""html"",""forcequirks"":true}]")]
     // EOF
-    [DataRow("<!doctype html system>", @"[{""type"":""doctype"",""name"":""html"",""forcequirks"":true}]")]
+    [DataRow("<!doctype html system", @"[{""type"":""doctype"",""name"":""html"",""forcequirks"":true}]")]
     // Anything else
     [DataRow("<!doctype html systemsid'>", @"[{""type"":""doctype"",""name"":""html"",""forcequirks"":true}]")]
     public void GivenHtmlCorrectTokensGenerated(string html, string json)
