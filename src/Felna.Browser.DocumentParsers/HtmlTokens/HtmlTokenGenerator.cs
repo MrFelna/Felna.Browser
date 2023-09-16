@@ -306,6 +306,15 @@ internal class HtmlTokenGenerator
 
                     if (!success)
                         return new DocTypeToken {Name = doctypeName, PublicIdentifier = publicIdentifier, SystemIdentifier = systemIdentifier, ForceQuirks = true};
+                    
+                    while (CharacterRangeReference.TokenWhiteSpace.Contains(character))
+                    {
+                        _streamConsumer.ConsumeChar();
+                        (success, character) = _streamConsumer.TryGetCurrentChar();
+
+                        if (!success)
+                            return new DocTypeToken {Name = doctypeName, PublicIdentifier = publicIdentifier, SystemIdentifier = systemIdentifier, ForceQuirks = true};
+                    }
                     break;
                 }
                 default:
