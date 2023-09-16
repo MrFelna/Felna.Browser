@@ -324,7 +324,7 @@ internal class HtmlTokenGenerator
         {
             var (success, character) = _streamConsumer.TryGetCurrentChar();
             if (!success)
-                return new DocTypeToken {Name = name, PublicIdentifier = publicIdentifier, SystemIdentifier = systemIdentifier, ForceQuirks = true};
+                return new DocTypeToken {Name = name, PublicIdentifier = publicIdentifier, SystemIdentifier = systemIdentifier, ForceQuirks = forceQuirks};
             _streamConsumer.ConsumeChar();
             if (character == CharacterReference.GreaterThanSign)
                 return new DocTypeToken {Name = name, PublicIdentifier = publicIdentifier, SystemIdentifier = systemIdentifier, ForceQuirks = forceQuirks};
