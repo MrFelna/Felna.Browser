@@ -79,10 +79,12 @@ internal class HtmlTokenGenerator
 
     private HtmlToken GetDocTypeToken()
     {
+        var docTypeTokenBuilder = new DocTypeTokenBuilder();
+        
         var (success, character) = _streamConsumer.TryGetCurrentChar();
 
         if (!success)
-            return new DocTypeToken {ForceQuirks = true};
+            return docTypeTokenBuilder.SetForceQuirks().Build();
 
         while (CharacterRangeReference.TokenWhiteSpace.Contains(character))
         {
@@ -90,18 +92,17 @@ internal class HtmlTokenGenerator
             (success, character) = _streamConsumer.TryGetCurrentChar();
 
             if (!success)
-                return new DocTypeToken {ForceQuirks = true};
+                return docTypeTokenBuilder.SetForceQuirks().Build();
         }
         
         // before DOCTYPE name state
         if (character == CharacterReference.GreaterThanSign)
         {
             _streamConsumer.ConsumeChar();
-            return new DocTypeToken {ForceQuirks = true};
+            return docTypeTokenBuilder.SetForceQuirks().Build();
         }
         
         // DOCTYPE name state
-        var doctypeNameBuilder = new StringBuilder();
         while (true)
         {
             if (CharacterRangeReference.TokenWhiteSpace.Contains(character))
@@ -112,21 +113,20 @@ internal class HtmlTokenGenerator
             if (character == CharacterReference.GreaterThanSign)
             {
                 _streamConsumer.ConsumeChar();
-                return new DocTypeToken {Name = doctypeNameBuilder.ToString()};
+                return docTypeTokenBuilder.Build();
             }
 
             if (character == CharacterReference.Null)
-                doctypeNameBuilder.Append(CharacterReference.ReplacementCharacter);
+                docTypeTokenBuilder.AppendToName(CharacterReference.ReplacementCharacter);
             else
-                doctypeNameBuilder.Append(CharacterReference.ToAsciiLower(character));
+                docTypeTokenBuilder.AppendToName(CharacterReference.ToAsciiLower(character));
             
             _streamConsumer.ConsumeChar();
             (success, character) = _streamConsumer.TryGetCurrentChar();
 
             if (!success)
-                return new DocTypeToken {ForceQuirks = true, Name = doctypeNameBuilder.ToString()};
+                return docTypeTokenBuilder.SetForceQuirks().Build();
         }
-        var doctypeName = doctypeNameBuilder.ToString();
 
         // after DOCTYPE name state
         while (CharacterRangeReference.TokenWhiteSpace.Contains(character))
@@ -135,19 +135,16 @@ internal class HtmlTokenGenerator
             (success, character) = _streamConsumer.TryGetCurrentChar();
 
             if (!success)
-                return new DocTypeToken {ForceQuirks = true, Name = doctypeName};
+                return docTypeTokenBuilder.SetForceQuirks().Build();
         }
         
         if (character == CharacterReference.GreaterThanSign)
         {
             _streamConsumer.ConsumeChar();
-            return new DocTypeToken {Name = doctypeName};
+            return docTypeTokenBuilder.Build();
         }
 
         (success, var result) = _streamConsumer.LookAhead(StringReference.System.Length);
-
-        string? publicIdentifier = null;
-        string? systemIdentifier = null;
 
         var expectPublicIdentifier = success && StringReference.AsciiCaseInsensitiveEquals(result, StringReference.Public);
         var expectSystemIdentifier = success && StringReference.AsciiCaseInsensitiveEquals(result, StringReference.System);
@@ -155,7 +152,7 @@ internal class HtmlTokenGenerator
 
         if (!expectPublicIdentifier && !expectSystemIdentifier)
         {
-            return GetBogusDoctypeToken(name: doctypeName, forceQuirks: true);
+            return GetBogusDoctypeToken(docTypeTokenBuilder.SetForceQuirks());
         }
         
         if (expectPublicIdentifier)
@@ -165,7 +162,7 @@ internal class HtmlTokenGenerator
             (success, character) = _streamConsumer.TryGetCurrentChar();
 
             if (!success)
-                return new DocTypeToken {Name = doctypeName, ForceQuirks = true};
+                return docTypeTokenBuilder.SetForceQuirks().Build();
             
             // after DOCTYPE public keyword state
             while (CharacterRangeReference.TokenWhiteSpace.Contains(character))
@@ -174,18 +171,18 @@ internal class HtmlTokenGenerator
                 (success, character) = _streamConsumer.TryGetCurrentChar();
 
                 if (!success)
-                    return new DocTypeToken {Name = doctypeName, ForceQuirks = true};
+                    return docTypeTokenBuilder.SetForceQuirks().Build();
             }
 
             switch (character)
             {
                 case CharacterReference.GreaterThanSign:
                     _streamConsumer.ConsumeChar();
-                    return new DocTypeToken {Name = doctypeName, ForceQuirks = true};
+                    return docTypeTokenBuilder.SetForceQuirks().Build();
                 case CharacterReference.QuotationMark or CharacterReference.Apostrophe:
                 {
                     var publicIdQuoteChar = character;
-                    publicIdentifier = "";
+                    docTypeTokenBuilder.SetPublicIdentifierPresent();
 
                     do
                     {
@@ -193,22 +190,22 @@ internal class HtmlTokenGenerator
                         (success, character) = _streamConsumer.TryGetCurrentChar();
 
                         if (!success)
-                            return new DocTypeToken {Name = doctypeName, PublicIdentifier = publicIdentifier, ForceQuirks = true};
+                            return docTypeTokenBuilder.SetForceQuirks().Build();
                         if (character == publicIdQuoteChar)
                             break;
                         if (character == CharacterReference.GreaterThanSign)
                         {
                             _streamConsumer.ConsumeChar();
-                            return new DocTypeToken {Name = doctypeName, PublicIdentifier = publicIdentifier, ForceQuirks = true};
+                            return docTypeTokenBuilder.SetForceQuirks().Build();
                         }
 
                         if (character == CharacterReference.Null)
                         {
-                            publicIdentifier += CharacterReference.ReplacementCharacter;
+                            docTypeTokenBuilder.AppendToPublicIdentifier(CharacterReference.ReplacementCharacter);
                         }
                         else
                         {
-                            publicIdentifier += character;
+                            docTypeTokenBuilder.AppendToPublicIdentifier(character);
                         }
                     } while (true);
                 
@@ -216,7 +213,7 @@ internal class HtmlTokenGenerator
                     (success, character) = _streamConsumer.TryGetCurrentChar();
 
                     if (!success)
-                        return new DocTypeToken {Name = doctypeName, PublicIdentifier = publicIdentifier, ForceQuirks = true};
+                        return docTypeTokenBuilder.SetForceQuirks().Build();
                 
                     // after DOCTYPE public identifier state
                     while (CharacterRangeReference.TokenWhiteSpace.Contains(character))
@@ -225,25 +222,25 @@ internal class HtmlTokenGenerator
                         (success, character) = _streamConsumer.TryGetCurrentChar();
 
                         if (!success)
-                            return new DocTypeToken {Name = doctypeName, PublicIdentifier = publicIdentifier, ForceQuirks = true};
+                            return docTypeTokenBuilder.SetForceQuirks().Build();
                     }
 
                     switch (character)
                     {
                         case CharacterReference.GreaterThanSign:
                             _streamConsumer.ConsumeChar();
-                            return new DocTypeToken {Name = doctypeName, PublicIdentifier = publicIdentifier};
+                            return docTypeTokenBuilder.Build();
                         case CharacterReference.QuotationMark or CharacterReference.Apostrophe:
                             expectSystemAfterPublicIdentifier = true;
                             break;
                         default:
-                            return GetBogusDoctypeToken(name: doctypeName, publicIdentifier: publicIdentifier, forceQuirks: true);
+                            return GetBogusDoctypeToken(docTypeTokenBuilder.SetForceQuirks());
                     }
 
                     break;
                 }
                 default:
-                    return GetBogusDoctypeToken(name: doctypeName, forceQuirks: true);
+                    return GetBogusDoctypeToken(docTypeTokenBuilder.SetForceQuirks());
             }
         }
         
@@ -255,7 +252,7 @@ internal class HtmlTokenGenerator
                 (success, character) = _streamConsumer.TryGetCurrentChar();
 
                 if (!success)
-                    return new DocTypeToken {Name = doctypeName, ForceQuirks = true};
+                    return docTypeTokenBuilder.SetForceQuirks().Build();
             }
             
             while (CharacterRangeReference.TokenWhiteSpace.Contains(character))
@@ -264,18 +261,18 @@ internal class HtmlTokenGenerator
                 (success, character) = _streamConsumer.TryGetCurrentChar();
 
                 if (!success)
-                    return new DocTypeToken {Name = doctypeName, ForceQuirks = true};
+                    return docTypeTokenBuilder.SetForceQuirks().Build();
             }
 
             switch (character)
             {
                 case CharacterReference.GreaterThanSign:
                     _streamConsumer.ConsumeChar();
-                    return new DocTypeToken {Name = doctypeName, ForceQuirks = true};
+                    return docTypeTokenBuilder.SetForceQuirks().Build();
                 case CharacterReference.QuotationMark or CharacterReference.Apostrophe:
                 {
                     var systemIdQuoteChar = character;
-                    systemIdentifier = "";
+                    docTypeTokenBuilder.SetSystemIdentifierPresent();
 
                     do
                     {
@@ -283,21 +280,21 @@ internal class HtmlTokenGenerator
                         (success, character) = _streamConsumer.TryGetCurrentChar();
 
                         if (!success)
-                            return new DocTypeToken {Name = doctypeName, PublicIdentifier = publicIdentifier, SystemIdentifier = systemIdentifier, ForceQuirks = true};
+                            return docTypeTokenBuilder.SetForceQuirks().Build();
                         if (character == systemIdQuoteChar)
                             break;
                         if (character == CharacterReference.GreaterThanSign)
                         {
                             _streamConsumer.ConsumeChar();
-                            return new DocTypeToken {Name = doctypeName, PublicIdentifier = publicIdentifier, SystemIdentifier = systemIdentifier, ForceQuirks = true};
+                            return docTypeTokenBuilder.SetForceQuirks().Build();
                         }
                         if (character == CharacterReference.Null)
                         {
-                            systemIdentifier += CharacterReference.ReplacementCharacter;
+                            docTypeTokenBuilder.AppendToSystemIdentifier(CharacterReference.ReplacementCharacter);
                         }
                         else
                         {
-                            systemIdentifier += character;
+                            docTypeTokenBuilder.AppendToSystemIdentifier(character);
                         }
                     } while (true);
 
@@ -305,7 +302,7 @@ internal class HtmlTokenGenerator
                     (success, character) = _streamConsumer.TryGetCurrentChar();
 
                     if (!success)
-                        return new DocTypeToken {Name = doctypeName, PublicIdentifier = publicIdentifier, SystemIdentifier = systemIdentifier, ForceQuirks = true};
+                        return docTypeTokenBuilder.SetForceQuirks().Build();
                     
                     while (CharacterRangeReference.TokenWhiteSpace.Contains(character))
                     {
@@ -313,30 +310,30 @@ internal class HtmlTokenGenerator
                         (success, character) = _streamConsumer.TryGetCurrentChar();
 
                         if (!success)
-                            return new DocTypeToken {Name = doctypeName, PublicIdentifier = publicIdentifier, SystemIdentifier = systemIdentifier, ForceQuirks = true};
+                            return docTypeTokenBuilder.SetForceQuirks().Build();
                     }
                     break;
                 }
                 default:
-                    return GetBogusDoctypeToken(doctypeName, forceQuirks: true);
+                    return GetBogusDoctypeToken(docTypeTokenBuilder.SetForceQuirks());
             }
         }
         
         // bogus DOCTYPE state
-        var forceQuirks = !expectSystemIdentifier && !expectPublicIdentifier;
-        return GetBogusDoctypeToken(doctypeName, publicIdentifier, systemIdentifier, forceQuirks);
+        return GetBogusDoctypeToken(docTypeTokenBuilder);
     }
 
-    private HtmlToken GetBogusDoctypeToken(string? name = null, string? publicIdentifier = null, string? systemIdentifier = null, bool forceQuirks = false)
+    private HtmlToken GetBogusDoctypeToken(DocTypeTokenBuilder docTypeTokenBuilder)
     {
+        var docTypeToken = docTypeTokenBuilder.Build();
         do
         {
             var (success, character) = _streamConsumer.TryGetCurrentChar();
             if (!success)
-                return new DocTypeToken {Name = name, PublicIdentifier = publicIdentifier, SystemIdentifier = systemIdentifier, ForceQuirks = forceQuirks};
+                return docTypeToken;
             _streamConsumer.ConsumeChar();
             if (character == CharacterReference.GreaterThanSign)
-                return new DocTypeToken {Name = name, PublicIdentifier = publicIdentifier, SystemIdentifier = systemIdentifier, ForceQuirks = forceQuirks};
+                return docTypeToken;
         } while (true);
     }
 
