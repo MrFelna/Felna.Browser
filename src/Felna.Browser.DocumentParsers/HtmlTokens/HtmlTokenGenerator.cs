@@ -1,5 +1,4 @@
-﻿using System.Text;
-using Felna.Browser.DocumentParsers.StreamConsumers;
+﻿using Felna.Browser.DocumentParsers.StreamConsumers;
 using Felna.Browser.DocumentParsers.TextReferences;
 
 namespace Felna.Browser.DocumentParsers.HtmlTokens;
@@ -46,7 +45,7 @@ internal class HtmlTokenGenerator
 
         if (character == CharacterReference.QuestionMark)
         {
-            return GetBogusCommentToken();
+            return new CommentTokenGenerator(_streamConsumer).GetBogusComment();
         }
 
         throw new NotImplementedException();
@@ -74,28 +73,6 @@ internal class HtmlTokenGenerator
             return new DocTypeTokenGenerator(_streamConsumer).GetDocTypeToken();
         }
 
-        return GetBogusCommentToken();
-    }
-    
-    private HtmlToken GetBogusCommentToken()
-    {
-        var commentDataBuilder = new StringBuilder();
-        while(true)
-        {
-            var (success, character) = _streamConsumer.TryGetCurrentChar();
-
-            if (!success)
-                return new CommentToken {Data = commentDataBuilder.ToString()};
-            
-            _streamConsumer.ConsumeChar();
-            
-            if (character == CharacterReference.GreaterThanSign)
-                return new CommentToken {Data = commentDataBuilder.ToString()};
-
-            if (character == CharacterReference.Null)
-                commentDataBuilder.Append(CharacterReference.ReplacementCharacter);
-            else
-                commentDataBuilder.Append(character);
-        }
+        return new CommentTokenGenerator(_streamConsumer).GetBogusComment();
     }
 }

@@ -17,7 +17,7 @@ internal class DocTypeTokenGenerator
 
     internal HtmlToken GetDocTypeToken()
     {
-        if (_docTypeToken != null)
+        if (_docTypeToken is not null)
             return _docTypeToken;
         
         var token = DocTypeTokenInDoctypeState();
