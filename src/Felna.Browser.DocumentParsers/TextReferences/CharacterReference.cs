@@ -23,6 +23,8 @@ internal static class CharacterReference
     internal const char Ampersand = '\u0026';
     
     internal const char Apostrophe = '\u0027';
+    
+    internal const char HyphenMinus = '\u002D';
 
     internal const char Digit0 = '\u0030';
     

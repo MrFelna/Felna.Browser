@@ -55,9 +55,10 @@ internal class HtmlTokenGenerator
     {
         var (success, result) = _streamConsumer.LookAhead(2);
 
-        if (success && result == "--")
+        if (success && result == StringReference.DoubleHyphen)
         {
-            throw new NotImplementedException("Comment start");
+            _streamConsumer.ConsumeChar(2);
+            return new CommentTokenGenerator(_streamConsumer).GetComment();
         }
         
         (success, result) = _streamConsumer.LookAhead(StringReference.DocType.Length);

@@ -3,6 +3,8 @@
 internal static class StringReference
 {
     internal const string DocType = "DOCTYPE";
+
+    internal const string DoubleHyphen = "--";
     
     internal const string Public = "public";
     
