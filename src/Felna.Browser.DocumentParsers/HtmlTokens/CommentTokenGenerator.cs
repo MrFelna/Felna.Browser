@@ -268,7 +268,6 @@ internal class CommentTokenGenerator
                 _streamConsumer.ConsumeChar();
                 return ConstructCommentToken();
             default:
-                _streamConsumer.ConsumeChar();
                 _commentDataBuilder
                     .Append(CharacterReference.HyphenMinus)
                     .Append(CharacterReference.HyphenMinus)
