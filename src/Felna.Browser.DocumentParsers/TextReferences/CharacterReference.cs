@@ -26,6 +26,8 @@ internal static class CharacterReference
     
     internal const char HyphenMinus = '\u002D';
 
+    internal const char Solidus = '\u002F';
+
     internal const char Digit0 = '\u0030';
     
     internal const char Digit9 = '\u0039';
