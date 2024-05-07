@@ -1243,7 +1243,7 @@ internal class HtmlTokenGenerator
         switch (character)
         {
             case var _ when CharacterRangeReference.AsciiDigit.Contains(character):
-                _parserState = TokenParserState.HexadecimalCharacterReference;
+                _parserState = TokenParserState.DecimalCharacterReference;
                 return null;
             default:
                 _parserState = _returnState;
@@ -1265,15 +1265,15 @@ internal class HtmlTokenGenerator
         {
             case var _ when CharacterRangeReference.AsciiDigit.Contains(character):
                 _streamConsumer.ConsumeChar();
-                ShiftAndIncrementCharacterReferenceCode(character - 0x30);
+                ShiftAndIncrementCharacterReferenceCode(16, character - 0x30);
                 return null;
             case var _ when CharacterRangeReference.AsciiUpperHexLetter.Contains(character):
                 _streamConsumer.ConsumeChar();
-                ShiftAndIncrementCharacterReferenceCode(character - 0x37);
+                ShiftAndIncrementCharacterReferenceCode(16, character - 0x37);
                 return null;
             case var _ when CharacterRangeReference.AsciiLowerHexLetter.Contains(character):
                 _streamConsumer.ConsumeChar();
-                ShiftAndIncrementCharacterReferenceCode(character - 0x57);
+                ShiftAndIncrementCharacterReferenceCode(16, character - 0x57);
                 return null;
             case CharacterReference.SemiColon:
                 _streamConsumer.ConsumeChar();
@@ -1299,7 +1299,7 @@ internal class HtmlTokenGenerator
         {
             case var _ when CharacterRangeReference.AsciiDigit.Contains(character):
                 _streamConsumer.ConsumeChar();
-                ShiftAndIncrementCharacterReferenceCode(character - 0x30);
+                ShiftAndIncrementCharacterReferenceCode(10, character - 0x30);
                 return null;
             case CharacterReference.SemiColon:
                 _streamConsumer.ConsumeChar();
@@ -1362,6 +1362,9 @@ internal class HtmlTokenGenerator
 
         var codePoint = char.ConvertFromUtf32(_characterReferenceCode);
         _temporaryBuffer = new StringBuilder(codePoint);
+
+        _parserState = _returnState;
+        
         return FlushCodePointsConsumedAsACharacterReference();
     }
 
@@ -1418,11 +1421,11 @@ internal class HtmlTokenGenerator
         return _returnState != TokenParserState.Data; // TODO update once appropriate states added
     }
 
-    private void ShiftAndIncrementCharacterReferenceCode(int increment)
+    private void ShiftAndIncrementCharacterReferenceCode(int shift, int increment)
     {
         if (_characterReferenceCode <= MaxCodeReference)
         {
-            _characterReferenceCode *= 16;
+            _characterReferenceCode *= shift;
             _characterReferenceCode += increment;
         }
     }
