@@ -8,6 +8,7 @@ internal class HtmlTokenGenerator
 {
     private readonly IStreamConsumer _streamConsumer;
     private TokenParserState _parserState;
+    private TokenParserState _returnState;
     
     private StringBuilder _commentDataBuilder = new StringBuilder();
     private CommentToken? _commentToken;
@@ -15,10 +16,18 @@ internal class HtmlTokenGenerator
     private DocTypeTokenBuilder _docTypeTokenBuilder = new DocTypeTokenBuilder();
     private DocTypeToken? _docTypeToken;
 
+    private HtmlTokenAttributeBuilder _htmlTokenAttributeBuilder = new HtmlTokenAttributeBuilder();
+    private HtmlTokenAttribute? _htmlTokenAttribute;
+
+    private StringBuilder _temporaryBuffer = new StringBuilder();
+    private int _characterReferenceCode;
+    private const int MaxCodeReference = 0x10FFFF;
+
     internal HtmlTokenGenerator(IStreamConsumer streamConsumer)
     {
         _streamConsumer = streamConsumer;
         _parserState = TokenParserState.Data;
+        _returnState = TokenParserState.Data;
     }
 
     internal HtmlToken GetNextToken()
@@ -59,6 +68,15 @@ internal class HtmlTokenGenerator
                 TokenParserState.DoctypeSystemIdentifierSingleQuoted => GetTokenFrom66DoctypeSystemIdentifierSingleQuotedState(),
                 TokenParserState.AfterDoctypeSystemIdentifier => GetTokenFrom67AfterDoctypeSystemIdentifierState(),
                 TokenParserState.BogusDoctype => GetTokenFrom68BogusDoctypeState(),
+                TokenParserState.CharacterReference => GetTokenFrom72CharacterReferenceState(),
+                TokenParserState.NamedCharacterReference => GetTokenFrom73NamedCharacterReferenceState(),
+                TokenParserState.AmbiguousAmpersand => GetTokenFrom74AmbiguousAmpersandState(),
+                TokenParserState.NumericCharacterReference => GetTokenFrom75NumericCharacterReferenceState(),
+                TokenParserState.HexadecimalCharacterReferenceStart => GetTokenFrom76HexadecimalCharacterReferenceStartState(),
+                TokenParserState.DecimalCharacterReferenceStart => GetTokenFrom77DecimalCharacterReferenceStartState(),
+                TokenParserState.HexadecimalCharacterReference => GetTokenFrom78HexadecimalCharacterReferenceState(),
+                TokenParserState.DecimalCharacterReference => GetTokenFrom79DecimalCharacterReferenceState(),
+                TokenParserState.NumericCharacterReferenceEnd => GetTokenFrom80NumericCharacterReferenceEndState(),
                 _ => throw new NotImplementedException()
             };
         } while (token is null);
@@ -76,15 +94,20 @@ internal class HtmlTokenGenerator
         switch (character)
         {
             case CharacterReference.Ampersand:
-                throw new NotImplementedException();
+                _streamConsumer.ConsumeChar();
+                _returnState = TokenParserState.Data;
+                _parserState = TokenParserState.CharacterReference;
+                return null;
             case CharacterReference.LessThanSign:
                 _streamConsumer.ConsumeChar();
                 _parserState = TokenParserState.TagOpen;
                 return null;
             case CharacterReference.Null:
-                throw new NotImplementedException();
+                _streamConsumer.ConsumeChar();
+                return new CharacterToken { Data = character.ToString() };
             default:
-                throw new NotImplementedException();
+                _streamConsumer.ConsumeChar();
+                return new CharacterToken { Data = character.ToString() };
         }
     }
 
@@ -1032,6 +1055,316 @@ internal class HtmlTokenGenerator
         }
     }
 
+    private HtmlToken? GetTokenFrom72CharacterReferenceState()
+    {
+        _temporaryBuffer = new StringBuilder();
+        _temporaryBuffer.Append(CharacterReference.Ampersand);
+        
+        var (success, character) = _streamConsumer.TryGetCurrentChar();
+
+        if (!success)
+        {
+            _parserState = _returnState;
+            return FlushCodePointsConsumedAsACharacterReference();
+        }
+
+        switch (character)
+        {
+            case var _ when CharacterRangeReference.AsciiAlphaNumeric.Contains(character):
+                _parserState = TokenParserState.NamedCharacterReference;
+                return null;
+            case CharacterReference.NumberSign:
+                _streamConsumer.ConsumeChar();
+                _temporaryBuffer.Append(character);
+                _parserState = TokenParserState.NumericCharacterReference;
+                return null;
+            default:
+                _parserState = _returnState;
+                return FlushCodePointsConsumedAsACharacterReference();
+        }
+    }
+
+    private HtmlToken? GetTokenFrom73NamedCharacterReferenceState()
+    {
+        var partialName = new string(new[] { CharacterReference.Ampersand });
+        var matchingNames = NamedEntityReference.Entities.Keys.Where(k => k.StartsWith(partialName, StringComparison.Ordinal)).ToArray();
+        string? match = null;
+        
+        while (matchingNames.Length > 1)
+        {
+            var (success, result) = _streamConsumer.LookAhead(partialName.Length);
+            if (!success)
+            {
+                matchingNames = Array.Empty<string>();
+                break;
+            }
+
+            partialName = CharacterReference.Ampersand + result;
+            matchingNames = NamedEntityReference.Entities.Keys.Where(k => k.StartsWith(partialName, StringComparison.Ordinal)).ToArray();
+            if (matchingNames.Contains(partialName))
+            {
+                match = partialName; // We've matched one reference, store in case further characters match nothing
+            }
+                
+        }
+
+        if (matchingNames.Length == 1 && (match is null || match != matchingNames[0]))
+        {
+            var possibleMatch = matchingNames[0];
+            var (success, result) = _streamConsumer.LookAhead(possibleMatch.Length - 1);
+            if (success && possibleMatch == CharacterReference.Ampersand + result)
+            {
+                match = possibleMatch;
+            }
+        }
+
+        if (match is not null)
+        {
+            var historical = false;
+            if (ConsumedAsPartOfAnAttribute() && match[^1] != CharacterReference.SemiColon)
+            {
+                var (success, result) = _streamConsumer.LookAhead(match.Length);
+                if (success)
+                {
+                    var nextInputChar = result[^1];
+                    historical = nextInputChar == CharacterReference.EqualsSign || CharacterRangeReference.AsciiAlphaNumeric.Contains(nextInputChar);
+                }
+            }
+
+            if (historical)
+            {
+                _temporaryBuffer = new StringBuilder(match);
+            }
+            else
+            {
+                _temporaryBuffer = new StringBuilder(NamedEntityReference.Entities[match].Characters);
+            }
+            
+            _streamConsumer.ConsumeChar(match.Length - 1);
+            
+            _parserState = _returnState;
+        }
+        else
+        {
+            _parserState = TokenParserState.AmbiguousAmpersand;
+        }
+
+        return FlushCodePointsConsumedAsACharacterReference();
+    }
+
+    private HtmlToken? GetTokenFrom74AmbiguousAmpersandState()
+    {
+        var (success, character) = _streamConsumer.TryGetCurrentChar();
+
+        if (!success)
+        {
+            _parserState = _returnState;
+            return null;
+        }
+
+        switch (character)
+        {
+            case var _ when CharacterRangeReference.AsciiAlphaNumeric.Contains(character):
+                _streamConsumer.ConsumeChar();
+                
+                if (ConsumedAsPartOfAnAttribute())
+                {
+                    _htmlTokenAttributeBuilder.AppendToValue(character);
+                    return null;
+                }
+
+                return new CharacterToken { Data = character.ToString() };
+            case CharacterReference.SemiColon:
+                _parserState = _returnState;
+                return null;
+            default:
+                _parserState = _returnState;
+                return null;
+        }
+    }
+    
+    private HtmlToken? GetTokenFrom75NumericCharacterReferenceState()
+    {
+        _characterReferenceCode = 0;
+        
+        var (success, character) = _streamConsumer.TryGetCurrentChar();
+
+        if (!success)
+        {
+            _parserState = TokenParserState.DecimalCharacterReferenceStart;
+            return null;
+        }
+
+        switch (character)
+        {
+            case CharacterReference.LowerCaseX:
+            case CharacterReference.UpperCaseX:
+                _streamConsumer.ConsumeChar();
+                _temporaryBuffer.Append(character);
+                _parserState = TokenParserState.HexadecimalCharacterReferenceStart;
+                return null;
+            default:
+                _parserState = TokenParserState.DecimalCharacterReferenceStart;
+                return null;
+        }
+    }
+    
+    private HtmlToken? GetTokenFrom76HexadecimalCharacterReferenceStartState()
+    {
+        var (success, character) = _streamConsumer.TryGetCurrentChar();
+
+        if (!success)
+        {
+            _parserState = _returnState;
+            return FlushCodePointsConsumedAsACharacterReference();
+        }
+
+        switch (character)
+        {
+            case var _ when CharacterRangeReference.AsciiHex.Contains(character):
+                _parserState = TokenParserState.HexadecimalCharacterReference;
+                return null;
+            default:
+                _parserState = _returnState;
+                return FlushCodePointsConsumedAsACharacterReference();
+        }
+    }
+    
+    private HtmlToken? GetTokenFrom77DecimalCharacterReferenceStartState()
+    {
+        var (success, character) = _streamConsumer.TryGetCurrentChar();
+
+        if (!success)
+        {
+            _parserState = _returnState;
+            return FlushCodePointsConsumedAsACharacterReference();
+        }
+
+        switch (character)
+        {
+            case var _ when CharacterRangeReference.AsciiDigit.Contains(character):
+                _parserState = TokenParserState.HexadecimalCharacterReference;
+                return null;
+            default:
+                _parserState = _returnState;
+                return FlushCodePointsConsumedAsACharacterReference();
+        }
+    }
+    
+    private HtmlToken? GetTokenFrom78HexadecimalCharacterReferenceState()
+    {
+        var (success, character) = _streamConsumer.TryGetCurrentChar();
+
+        if (!success)
+        {
+            _parserState = TokenParserState.NumericCharacterReferenceEnd;
+            return null;
+        }
+
+        switch (character)
+        {
+            case var _ when CharacterRangeReference.AsciiDigit.Contains(character):
+                _streamConsumer.ConsumeChar();
+                ShiftAndIncrementCharacterReferenceCode(character - 0x30);
+                return null;
+            case var _ when CharacterRangeReference.AsciiUpperHexLetter.Contains(character):
+                _streamConsumer.ConsumeChar();
+                ShiftAndIncrementCharacterReferenceCode(character - 0x37);
+                return null;
+            case var _ when CharacterRangeReference.AsciiLowerHexLetter.Contains(character):
+                _streamConsumer.ConsumeChar();
+                ShiftAndIncrementCharacterReferenceCode(character - 0x57);
+                return null;
+            case CharacterReference.SemiColon:
+                _streamConsumer.ConsumeChar();
+                _parserState = TokenParserState.NumericCharacterReferenceEnd;
+                return null;
+            default:
+                _parserState = TokenParserState.NumericCharacterReferenceEnd;
+                return null;
+        }
+    }
+    
+    private HtmlToken? GetTokenFrom79DecimalCharacterReferenceState()
+    {
+        var (success, character) = _streamConsumer.TryGetCurrentChar();
+
+        if (!success)
+        {
+            _parserState = TokenParserState.NumericCharacterReferenceEnd;
+            return null;
+        }
+
+        switch (character)
+        {
+            case var _ when CharacterRangeReference.AsciiDigit.Contains(character):
+                _streamConsumer.ConsumeChar();
+                ShiftAndIncrementCharacterReferenceCode(character - 0x30);
+                return null;
+            case CharacterReference.SemiColon:
+                _streamConsumer.ConsumeChar();
+                _parserState = TokenParserState.NumericCharacterReferenceEnd;
+                return null;
+            default:
+                _parserState = TokenParserState.NumericCharacterReferenceEnd;
+                return null;
+        }
+    }
+    
+    private HtmlToken? GetTokenFrom80NumericCharacterReferenceEndState()
+    {
+        var charRefCodeMap = new Dictionary<int, int>
+        {
+            { 0x80, 0x20AC },
+            { 0x82, 0x201A },
+            { 0x83, 0x0192 },
+            { 0x84, 0x201E },
+            { 0x85, 0x2026 },
+            { 0x86, 0x2020 },
+            { 0x87, 0x2021 },
+            { 0x88, 0x02C6 },
+            { 0x89, 0x2030 },
+            { 0x8A, 0x0160 },
+            { 0x8B, 0x2039 },
+            { 0x8C, 0x0152 },
+            { 0x8E, 0x017D },
+            { 0x91, 0x2018 },
+            { 0x92, 0x2019 },
+            { 0x93, 0x201C },
+            { 0x94, 0x201D },
+            { 0x95, 0x2022 },
+            { 0x96, 0x2013 },
+            { 0x97, 0x2014 },
+            { 0x98, 0x02DC },
+            { 0x99, 0x2122 },
+            { 0x9A, 0x0161 },
+            { 0x9B, 0x203A },
+            { 0x9C, 0x0153 },
+            { 0x9E, 0x017E },
+            { 0x9F, 0x0178 },
+        };
+        if (_characterReferenceCode <= 0)
+        {
+            _characterReferenceCode = CharacterReference.ReplacementCharacter;
+        } 
+        else if (_characterReferenceCode > MaxCodeReference)
+        {
+            _characterReferenceCode = CharacterReference.ReplacementCharacter;
+        }
+        else if (IsCharacterReferenceCodeSurrogate())
+        {
+            _characterReferenceCode = CharacterReference.ReplacementCharacter;
+        }
+        else if (charRefCodeMap.TryGetValue(_characterReferenceCode, out var replacementCodePoint))
+        {
+            _characterReferenceCode = replacementCodePoint;
+        }
+
+        var codePoint = char.ConvertFromUtf32(_characterReferenceCode);
+        _temporaryBuffer = new StringBuilder(codePoint);
+        return FlushCodePointsConsumedAsACharacterReference();
+    }
+
     private void CreateNewCommentToken()
     {
         _commentDataBuilder = new StringBuilder();
@@ -1056,4 +1389,46 @@ internal class HtmlTokenGenerator
         return _docTypeToken;
     }
     
+    private void CreateNewHtmlTokenAttributeToken()
+    {
+        _htmlTokenAttributeBuilder = new HtmlTokenAttributeBuilder();
+        _htmlTokenAttribute = null;
+    }
+
+    private HtmlTokenAttribute GetHtmlTokenAttributeToken()
+    {
+        _htmlTokenAttribute ??= _htmlTokenAttributeBuilder.Build();
+        return _htmlTokenAttribute;
+    }
+
+    private HtmlToken? FlushCodePointsConsumedAsACharacterReference()
+    {
+        if (ConsumedAsPartOfAnAttribute())
+        {
+            _htmlTokenAttributeBuilder.AppendToValue(_temporaryBuffer.ToString());
+            return null;
+        }
+
+        var characterToken = new CharacterToken { Data = _temporaryBuffer.ToString() };
+        return characterToken;
+    }
+
+    private bool ConsumedAsPartOfAnAttribute()
+    {
+        return _returnState != TokenParserState.Data; // TODO update once appropriate states added
+    }
+
+    private void ShiftAndIncrementCharacterReferenceCode(int increment)
+    {
+        if (_characterReferenceCode <= MaxCodeReference)
+        {
+            _characterReferenceCode *= 16;
+            _characterReferenceCode += increment;
+        }
+    }
+
+    private bool IsCharacterReferenceCodeSurrogate()
+    {
+        return _characterReferenceCode is >= 0xD800 and <= 0xDFFF;
+    }
 }

@@ -19,4 +19,9 @@
       <ProjectReference Include="..\Felna.Browser.DocumentObjectModel\Felna.Browser.DocumentObjectModel.csproj" />
     </ItemGroup>
 
+    <ItemGroup>
+      <None Remove="TextReferences\entities.json" />
+      <EmbeddedResource Include="TextReferences\entities.json" />
+    </ItemGroup>
+
 </Project>

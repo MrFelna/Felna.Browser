@@ -20,6 +20,28 @@ internal static class CharacterRangeReference
         HighCharInclusive = CharacterReference.Digit9
     };
 
+    internal static readonly ICharacterRange AsciiUpperHexLetter = new ContinuousCharacterRange
+    {
+        LowCharInclusive = CharacterReference.UpperCaseA,
+        HighCharInclusive = CharacterReference.UpperCaseF,
+    };
+
+    internal static readonly ICharacterRange AsciiLowerHexLetter = new ContinuousCharacterRange
+    {
+        LowCharInclusive = CharacterReference.LowerCaseA,
+        HighCharInclusive = CharacterReference.LowerCaseF,
+    };
+
+    internal static readonly ICharacterRange AsciiHex = new CharacterRange
+    {
+        SubRanges = new ICharacterRange[]
+        {
+            AsciiUpperHexLetter,
+            AsciiLowerHexLetter,
+            AsciiDigit,
+        },
+    };
+
     internal static readonly ICharacterRange AsciiAlpha = new CharacterRange
     {
         SubRanges = new ICharacterRange[]

@@ -20,6 +20,8 @@ internal static class CharacterReference
     
     internal const char QuotationMark = '\u0022';
     
+    internal const char NumberSign = '\u0023';
+    
     internal const char Ampersand = '\u0026';
     
     internal const char Apostrophe = '\u0027';
@@ -32,7 +34,11 @@ internal static class CharacterReference
     
     internal const char Digit9 = '\u0039';
     
+    internal const char SemiColon = '\u003B';
+    
     internal const char LessThanSign = '\u003C';
+    
+    internal const char EqualsSign = '\u003D';
     
     internal const char GreaterThanSign = '\u003E';
     
@@ -40,9 +46,17 @@ internal static class CharacterReference
     
     internal const char UpperCaseA = '\u0041';
     
+    internal const char UpperCaseF = '\u0046';
+    
+    internal const char UpperCaseX = '\u0058';
+    
     internal const char UpperCaseZ = '\u005A';
     
     internal const char LowerCaseA = '\u0061';
+    
+    internal const char LowerCaseF = '\u0066';
+    
+    internal const char LowerCaseX = '\u0078';
     
     internal const char LowerCaseZ = '\u007A';
 

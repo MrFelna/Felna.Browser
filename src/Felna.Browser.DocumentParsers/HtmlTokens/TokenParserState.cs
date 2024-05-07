@@ -32,4 +32,13 @@ internal enum TokenParserState
     DoctypeSystemIdentifierSingleQuoted = 66,
     AfterDoctypeSystemIdentifier = 67,
     BogusDoctype = 68,
+    CharacterReference = 72,
+    NamedCharacterReference = 73,
+    AmbiguousAmpersand = 74,
+    NumericCharacterReference = 75,
+    HexadecimalCharacterReferenceStart = 76,
+    DecimalCharacterReferenceStart = 77,
+    HexadecimalCharacterReference = 78,
+    DecimalCharacterReference = 79,
+    NumericCharacterReferenceEnd = 80,
 }
