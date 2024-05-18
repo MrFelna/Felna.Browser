@@ -62,7 +62,7 @@ internal static class CharacterReference
 
     internal const char ReplacementCharacter = '\ufffd';
 
-    internal static char ToAsciiLower(char c)
+    internal static int ToAsciiLower(int c)
     {
         if (CharacterRangeReference.AsciiUpperAlpha.Contains(c))
             return (char) (c + AsciiUpperLowerDiff);

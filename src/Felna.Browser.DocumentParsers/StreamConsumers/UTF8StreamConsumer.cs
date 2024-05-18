@@ -5,65 +5,65 @@ namespace Felna.Browser.DocumentParsers.StreamConsumers;
 
 internal class UTF8StreamConsumer : IStreamConsumer
 {
-    private readonly List<char> _charList = new List<char>();
+    private readonly List<UnicodeCodePoint> _codePointList = new List<UnicodeCodePoint>();
     private readonly Decoder _decoder = Encoding.UTF8.GetDecoder();
     private readonly Stream _stream;
     
     private bool _sourceStreamExhausted;
-    private int _currentCharIndex;
+    private int _currentCodePointIndex;
 
     internal UTF8StreamConsumer(Stream stream)
     {
         _stream = stream;
     }
 
-    public (bool Success, char character) TryGetCurrentChar()
+    public (bool Success, UnicodeCodePoint CodePoint) TryGetCurrentCodePoint()
     {
-        if (!ReadUntil(_currentCharIndex))
-            return (false, CharacterReference.ReplacementCharacter);
+        if (!ReadUntil(_currentCodePointIndex))
+            return (false, UnicodeCodePoint.ReplacementCharacter);
             
-        return (true, _charList[_currentCharIndex]);
+        return (true, _codePointList[_currentCodePointIndex]);
     }
 
-    public (bool Success, string result) LookAhead(int charCount)
+    public (bool Success, string result) LookAhead(int codePointCount)
     {
-        if (charCount < 1)
-            throw new ArgumentOutOfRangeException(nameof(charCount), "Char count must be at least 1");
+        if (codePointCount < 1)
+            throw new ArgumentOutOfRangeException(nameof(codePointCount), "Code point count must be at least 1");
         
-        if (!ReadUntil(_currentCharIndex + charCount - 1))
+        if (!ReadUntil(_currentCodePointIndex + codePointCount - 1))
             return (false, string.Empty);
 
-        var chars = _charList.GetRange(_currentCharIndex, charCount).ToArray();
+        var result = UnicodeCodePoint.ConvertToString(_codePointList.GetRange(_currentCodePointIndex, codePointCount));
 
-        return (true, new string(chars));
+        return (true, result);
     }
 
-    public void ConsumeChar(int charCount = 1)
+    public void ConsumeCodePoint(int codePointCount = 1)
     {
-        if (charCount < 1)
-            throw new ArgumentOutOfRangeException(nameof(charCount), "Char count must be at least 1");
+        if (codePointCount < 1)
+            throw new ArgumentOutOfRangeException(nameof(codePointCount), "Code point count must be at least 1");
 
-        _currentCharIndex += charCount;
+        _currentCodePointIndex += codePointCount;
     }
 
-    private bool ReadUntil(int charIndex)
+    private bool ReadUntil(int codePointIndex)
     {
-        while (_charList.Count <= charIndex)
+        while (_codePointList.Count <= codePointIndex)
         {
-            var (success, characters) = TryReadNextCharacter();
+            var (success, codePoint) = TryReadNextCodePoint();
             if (!success)
                 return false;
-            _charList.AddRange(characters);
+            _codePointList.Add(codePoint);
         }
 
         return true;
     }
     
     // https://stackoverflow.com/a/11672355
-    private (bool Success, char[] characters) TryReadNextCharacter()
+    private (bool Success, UnicodeCodePoint codePoint) TryReadNextCodePoint()
     {
         if (_sourceStreamExhausted)
-            return (false, new [] { CharacterReference.ReplacementCharacter });
+            return (false, UnicodeCodePoint.ReplacementCharacter);
         
         int byteAsInt;
         var nextChar = new char[2]; // need two to handle code points above \uFFFF
@@ -76,14 +76,15 @@ internal class UTF8StreamConsumer : IStreamConsumer
                 case 0:
                     continue;
                 case 1:
-                    return (true, nextChar[..1]); // Return an array of the single char
+                    return (true, new UnicodeCodePoint(nextChar[0])); // Return the single char
                 default:
-                    return (true, nextChar); // Return the array of two chars representing a code point above \uFFFF
+                    // Convert two UTF16 chars representing a code point above \uFFFF to UTF32
+                    return (true, new UnicodeCodePoint(nextChar[0], nextChar[1]));
             }
         }
 
         _sourceStreamExhausted = true;
 
-        return (false, new [] { CharacterReference.ReplacementCharacter });
+        return (false, UnicodeCodePoint.ReplacementCharacter);
     }
 }

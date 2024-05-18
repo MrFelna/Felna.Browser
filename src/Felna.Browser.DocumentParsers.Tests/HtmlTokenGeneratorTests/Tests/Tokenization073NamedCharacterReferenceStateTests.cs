@@ -24,7 +24,9 @@ public class Tokenization073NamedCharacterReferenceStateTests
         foreach (var row in NamedEntityReference.Entities)
         {
             var html = row.Key;
-            var tokens = new[] { new CharacterToken { Data = row.Value.Characters } };
+            var tokens = row.Value.CodePoints
+                .Select(char.ConvertFromUtf32)
+                .Select(s => new CharacterToken { Data = s });
             
             HtmlTokenGeneratorTestRunner.Run(html, tokens);
         }
@@ -36,11 +38,10 @@ public class Tokenization073NamedCharacterReferenceStateTests
         foreach (var row in NamedEntityReference.Entities)
         {
             var html = row.Key + "a";
-            var tokens = new[]
-            {
-                new CharacterToken { Data = row.Value.Characters },
-                new CharacterToken { Data = "a" },
-            };
+            var tokens = row.Value.CodePoints
+                .Select(char.ConvertFromUtf32)
+                .Select(s => new CharacterToken { Data = s })
+                .Union(new[] { new CharacterToken { Data = "a" } });
             
             HtmlTokenGeneratorTestRunner.Run(html, tokens);
         }

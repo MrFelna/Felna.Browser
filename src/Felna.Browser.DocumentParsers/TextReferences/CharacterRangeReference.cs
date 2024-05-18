@@ -62,7 +62,7 @@ internal static class CharacterRangeReference
 
     internal static readonly ICharacterRange TokenWhiteSpace = new IndividualCharacterRange
     {
-        Chars = new[]
+        Chars = new int[]
         {
             CharacterReference.CharacterTabulation,
             CharacterReference.LineFeed,
@@ -74,26 +74,35 @@ internal static class CharacterRangeReference
 
 internal interface ICharacterRange
 {
-    bool Contains(char c);
+    bool Contains(UnicodeCodePoint c);
+
+    bool Contains(int c);
 }
 
 internal class ContinuousCharacterRange : ICharacterRange
 {
-    internal required char LowCharInclusive { get; init; }
+    internal required int LowCharInclusive { get; init; }
     
-    internal required char HighCharInclusive { get; init; }
-
-    public bool Contains(char c)
+    internal required int HighCharInclusive { get; init; }
+    
+    public bool Contains(int c)
     {
         return LowCharInclusive <= c && c <= HighCharInclusive;
     }
+
+    public bool Contains(UnicodeCodePoint c) => Contains(c.Value);
 }
 
 internal class CharacterRange : ICharacterRange
 {
     internal required ICharacterRange[] SubRanges { get; init; }
 
-    public bool Contains(char c)
+    public bool Contains(int c)
+    {
+        return SubRanges.Any(r => r.Contains(c));
+    }
+    
+    public bool Contains(UnicodeCodePoint c)
     {
         return SubRanges.Any(r => r.Contains(c));
     }
@@ -101,7 +110,9 @@ internal class CharacterRange : ICharacterRange
 
 internal class IndividualCharacterRange : ICharacterRange
 {
-    internal required char[] Chars { get; init; }
+    internal required int[] Chars { get; init; }
 
-    public bool Contains(char c) => Chars.Contains(c);
+    public bool Contains(int c) => Chars.Contains(c);
+    
+    public bool Contains(UnicodeCodePoint u) => Chars.Any(c => c == u.Value);
 }

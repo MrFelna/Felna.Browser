@@ -19,9 +19,9 @@ internal class HtmlTokenGenerator
     private HtmlTokenAttributeBuilder _htmlTokenAttributeBuilder = new HtmlTokenAttributeBuilder();
     private HtmlTokenAttribute? _htmlTokenAttribute;
 
-    private StringBuilder _temporaryBuffer = new StringBuilder();
+    private List<UnicodeCodePoint> _temporaryBuffer = new List<UnicodeCodePoint>();
+    private readonly List<CharacterToken> _flushedCharacterTokens = new List<CharacterToken>();
     private int _characterReferenceCode;
-    private const int MaxCodeReference = 0x10FFFF;
 
     internal HtmlTokenGenerator(IStreamConsumer streamConsumer)
     {
@@ -36,6 +36,13 @@ internal class HtmlTokenGenerator
 
         do
         {
+            if (_flushedCharacterTokens.Any())
+            {
+                var characterToken = _flushedCharacterTokens.First();
+                _flushedCharacterTokens.Remove(characterToken);
+                return characterToken;
+            }
+            
             token = _parserState switch
             {
                 TokenParserState.Data => GetTokenFrom01DataState(),
@@ -86,34 +93,34 @@ internal class HtmlTokenGenerator
 
     private HtmlToken? GetTokenFrom01DataState()
     {
-        var (success, character) = _streamConsumer.TryGetCurrentChar();
+        var (success, codePoint) = _streamConsumer.TryGetCurrentCodePoint();
 
         if (!success)
             return new EndOfFileToken();
         
-        switch (character)
+        switch (codePoint.Value)
         {
             case CharacterReference.Ampersand:
-                _streamConsumer.ConsumeChar();
+                _streamConsumer.ConsumeCodePoint();
                 _returnState = TokenParserState.Data;
                 _parserState = TokenParserState.CharacterReference;
                 return null;
             case CharacterReference.LessThanSign:
-                _streamConsumer.ConsumeChar();
+                _streamConsumer.ConsumeCodePoint();
                 _parserState = TokenParserState.TagOpen;
                 return null;
             case CharacterReference.Null:
-                _streamConsumer.ConsumeChar();
-                return new CharacterToken { Data = character.ToString() };
+                _streamConsumer.ConsumeCodePoint();
+                return new CharacterToken { Data = codePoint.ToString() };
             default:
-                _streamConsumer.ConsumeChar();
-                return new CharacterToken { Data = character.ToString() };
+                _streamConsumer.ConsumeCodePoint();
+                return new CharacterToken { Data = codePoint.ToString() };
         }
     }
 
     private HtmlToken? GetTokenFrom06TagOpenState()
     {
-        var (success, character) = _streamConsumer.TryGetCurrentChar();
+        var (success, codePoint) = _streamConsumer.TryGetCurrentCodePoint();
 
         if (!success)
         {
@@ -121,15 +128,15 @@ internal class HtmlTokenGenerator
             return new CharacterToken{ Data = CharacterReference.LessThanSign.ToString() };
         }
         
-        switch (character)
+        switch (codePoint.Value)
         {
             case CharacterReference.ExclamationMark:
-                _streamConsumer.ConsumeChar();
+                _streamConsumer.ConsumeCodePoint();
                 _parserState = TokenParserState.MarkupDeclarationOpen;
                 return null;
             case CharacterReference.Solidus:
                 throw new NotImplementedException();
-            case var _ when CharacterRangeReference.AsciiAlpha.Contains(character):
+            case var _ when CharacterRangeReference.AsciiAlpha.Contains(codePoint):
                 throw new NotImplementedException();
             case CharacterReference.QuestionMark:
                 CreateNewCommentToken();
@@ -144,7 +151,7 @@ internal class HtmlTokenGenerator
 
     private HtmlToken? GetTokenFrom41BogusCommentState()
     {
-        var (success, character) = _streamConsumer.TryGetCurrentChar();
+        var (success, codePoint) = _streamConsumer.TryGetCurrentCodePoint();
 
         if (!success)
         {
@@ -152,19 +159,19 @@ internal class HtmlTokenGenerator
             return GetCommentToken();
         }
         
-        switch (character)
+        switch (codePoint.Value)
         {
             case CharacterReference.GreaterThanSign:
-                _streamConsumer.ConsumeChar();
+                _streamConsumer.ConsumeCodePoint();
                 _parserState = TokenParserState.Data;
                 return GetCommentToken();
             case CharacterReference.Null:
-                _streamConsumer.ConsumeChar();
+                _streamConsumer.ConsumeCodePoint();
                 _commentDataBuilder.Append(CharacterReference.ReplacementCharacter);
                 return null;
             default:
-                _streamConsumer.ConsumeChar();
-                _commentDataBuilder.Append(character);
+                _streamConsumer.ConsumeCodePoint();
+                _commentDataBuilder.Append(codePoint.ToString());
                 return null;
         }
     }
@@ -177,7 +184,7 @@ internal class HtmlTokenGenerator
         {
             if (result == StringReference.DoubleHyphen)
             {
-                _streamConsumer.ConsumeChar(StringReference.DoubleHyphen.Length);
+                _streamConsumer.ConsumeCodePoint(StringReference.DoubleHyphen.Length);
                 CreateNewCommentToken();
                 _parserState = TokenParserState.CommentStart;
                 return null;
@@ -189,7 +196,7 @@ internal class HtmlTokenGenerator
             {
                 if (StringReference.AsciiCaseInsensitiveEquals(result, StringReference.DocType))
                 {
-                    _streamConsumer.ConsumeChar(StringReference.DocType.Length);
+                    _streamConsumer.ConsumeCodePoint(StringReference.DocType.Length);
                     _parserState = TokenParserState.Doctype;
                     return null;
                 }
@@ -208,7 +215,7 @@ internal class HtmlTokenGenerator
 
     private HtmlToken? GetTokenFrom43CommentStartState()
     {
-        var (success, character) = _streamConsumer.TryGetCurrentChar();
+        var (success, codePoint) = _streamConsumer.TryGetCurrentCodePoint();
 
         if (!success)
         {
@@ -216,14 +223,14 @@ internal class HtmlTokenGenerator
             return null;
         }
         
-        switch (character)
+        switch (codePoint.Value)
         {
             case CharacterReference.HyphenMinus:
-                _streamConsumer.ConsumeChar();
+                _streamConsumer.ConsumeCodePoint();
                 _parserState = TokenParserState.CommentStartDash;
                 return null;
             case CharacterReference.GreaterThanSign:
-                _streamConsumer.ConsumeChar();
+                _streamConsumer.ConsumeCodePoint();
                 _parserState = TokenParserState.Data;
                 return GetCommentToken();
             default:
@@ -234,7 +241,7 @@ internal class HtmlTokenGenerator
     
     private HtmlToken? GetTokenFrom44CommentStartDashState()
     {
-        var (success, character) = _streamConsumer.TryGetCurrentChar();
+        var (success, codePoint) = _streamConsumer.TryGetCurrentCodePoint();
 
         if (!success)
         {
@@ -242,14 +249,14 @@ internal class HtmlTokenGenerator
             return GetCommentToken();
         }
         
-        switch (character)
+        switch (codePoint.Value)
         {
             case CharacterReference.HyphenMinus:
-                _streamConsumer.ConsumeChar();
+                _streamConsumer.ConsumeCodePoint();
                 _parserState = TokenParserState.CommentEnd;
                 return null;
             case CharacterReference.GreaterThanSign:
-                _streamConsumer.ConsumeChar();
+                _streamConsumer.ConsumeCodePoint();
                 _parserState = TokenParserState.Data;
                 return GetCommentToken();
             default:
@@ -261,7 +268,7 @@ internal class HtmlTokenGenerator
     
     private HtmlToken? GetTokenFrom45CommentState()
     {
-        var (success, character) = _streamConsumer.TryGetCurrentChar();
+        var (success, codePoint) = _streamConsumer.TryGetCurrentCodePoint();
 
         if (!success)
         {
@@ -269,31 +276,31 @@ internal class HtmlTokenGenerator
             return GetCommentToken();
         }
         
-        switch (character)
+        switch (codePoint.Value)
         {
             case CharacterReference.LessThanSign:
-                _streamConsumer.ConsumeChar();
-                _commentDataBuilder.Append(character);
+                _streamConsumer.ConsumeCodePoint();
+                _commentDataBuilder.Append(codePoint.ToString());
                 _parserState = TokenParserState.CommentLessThanSign;
                 return null;
             case CharacterReference.HyphenMinus:
-                _streamConsumer.ConsumeChar();
+                _streamConsumer.ConsumeCodePoint();
                 _parserState = TokenParserState.CommentEndDash;
                 return null;
             case CharacterReference.Null:
-                _streamConsumer.ConsumeChar();
+                _streamConsumer.ConsumeCodePoint();
                 _commentDataBuilder.Append(CharacterReference.ReplacementCharacter);
                 return null;
             default:
-                _streamConsumer.ConsumeChar();
-                _commentDataBuilder.Append(character);
+                _streamConsumer.ConsumeCodePoint();
+                _commentDataBuilder.Append(codePoint.ToString());
                 return null;
         }
     }
     
     private HtmlToken? GetTokenFrom46CommentLessThanSignState()
     {
-        var (success, character) = _streamConsumer.TryGetCurrentChar();
+        var (success, codePoint) = _streamConsumer.TryGetCurrentCodePoint();
 
         if (!success)
         {
@@ -301,16 +308,16 @@ internal class HtmlTokenGenerator
             return null;
         }
         
-        switch (character)
+        switch (codePoint.Value)
         {
             case CharacterReference.ExclamationMark:
-                _streamConsumer.ConsumeChar();
-                _commentDataBuilder.Append(character);
+                _streamConsumer.ConsumeCodePoint();
+                _commentDataBuilder.Append(codePoint.ToString());
                 _parserState = TokenParserState.CommentLessThanSignBang;
                 return null;
             case CharacterReference.LessThanSign:
-                _streamConsumer.ConsumeChar();
-                _commentDataBuilder.Append(character);
+                _streamConsumer.ConsumeCodePoint();
+                _commentDataBuilder.Append(codePoint.ToString());
                 return null;
             default:
                 _parserState = TokenParserState.Comment;
@@ -320,7 +327,7 @@ internal class HtmlTokenGenerator
     
     private HtmlToken? GetTokenFrom47CommentLessThanSignBangState()
     {
-        var (success, character) = _streamConsumer.TryGetCurrentChar();
+        var (success, codePoint) = _streamConsumer.TryGetCurrentCodePoint();
 
         if (!success)
         {
@@ -328,10 +335,10 @@ internal class HtmlTokenGenerator
             return null;
         }
         
-        switch (character)
+        switch (codePoint.Value)
         {
             case CharacterReference.HyphenMinus:
-                _streamConsumer.ConsumeChar();
+                _streamConsumer.ConsumeCodePoint();
                 _parserState = TokenParserState.CommentLessThanSignBangDash;
                 return null;
             default:
@@ -342,7 +349,7 @@ internal class HtmlTokenGenerator
     
     private HtmlToken? GetTokenFrom48CommentLessThanSignBangDashState()
     {
-        var (success, character) = _streamConsumer.TryGetCurrentChar();
+        var (success, codePoint) = _streamConsumer.TryGetCurrentCodePoint();
 
         if (!success)
         {
@@ -350,10 +357,10 @@ internal class HtmlTokenGenerator
             return null;
         }
         
-        switch (character)
+        switch (codePoint.Value)
         {
             case CharacterReference.HyphenMinus:
-                _streamConsumer.ConsumeChar();
+                _streamConsumer.ConsumeCodePoint();
                 _parserState = TokenParserState.CommentLessThanSignBangDashDash;
                 return null;
             default:
@@ -370,7 +377,7 @@ internal class HtmlTokenGenerator
     
     private HtmlToken? GetTokenFrom50CommentEndDashState()
     {
-        var (success, character) = _streamConsumer.TryGetCurrentChar();
+        var (success, codePoint) = _streamConsumer.TryGetCurrentCodePoint();
 
         if (!success)
         {
@@ -378,10 +385,10 @@ internal class HtmlTokenGenerator
             return GetCommentToken();
         }
         
-        switch (character)
+        switch (codePoint.Value)
         {
             case CharacterReference.HyphenMinus:
-                _streamConsumer.ConsumeChar();
+                _streamConsumer.ConsumeCodePoint();
                 _parserState = TokenParserState.CommentEnd;
                 return null;
             default:
@@ -393,7 +400,7 @@ internal class HtmlTokenGenerator
     
     private HtmlToken? GetTokenFrom51CommentEndState()
     {
-        var (success, character) = _streamConsumer.TryGetCurrentChar();
+        var (success, codePoint) = _streamConsumer.TryGetCurrentCodePoint();
 
         if (!success)
         {
@@ -401,18 +408,18 @@ internal class HtmlTokenGenerator
             return GetCommentToken();
         }
         
-        switch (character)
+        switch (codePoint.Value)
         {
             case CharacterReference.GreaterThanSign:
-                _streamConsumer.ConsumeChar();
+                _streamConsumer.ConsumeCodePoint();
                 _parserState = TokenParserState.Data;
                 return GetCommentToken();
             case CharacterReference.ExclamationMark:
-                _streamConsumer.ConsumeChar();
+                _streamConsumer.ConsumeCodePoint();
                 _parserState = TokenParserState.CommentEndBang;
                 return null;
             case CharacterReference.HyphenMinus:
-                _streamConsumer.ConsumeChar();
+                _streamConsumer.ConsumeCodePoint();
                 _commentDataBuilder.Append(CharacterReference.HyphenMinus);
                 return null;
             default:
@@ -425,7 +432,7 @@ internal class HtmlTokenGenerator
     
     private HtmlToken? GetTokenFrom52CommentEndBangState()
     {
-        var (success, character) = _streamConsumer.TryGetCurrentChar();
+        var (success, codePoint) = _streamConsumer.TryGetCurrentCodePoint();
 
         if (!success)
         {
@@ -433,17 +440,17 @@ internal class HtmlTokenGenerator
             return GetCommentToken();
         }
         
-        switch (character)
+        switch (codePoint.Value)
         {
             case CharacterReference.HyphenMinus:
-                _streamConsumer.ConsumeChar();
+                _streamConsumer.ConsumeCodePoint();
                 _commentDataBuilder.Append(CharacterReference.HyphenMinus);
                 _commentDataBuilder.Append(CharacterReference.HyphenMinus);
                 _commentDataBuilder.Append(CharacterReference.ExclamationMark);
                 _parserState = TokenParserState.CommentEndDash;
                 return null;
             case CharacterReference.GreaterThanSign:
-                _streamConsumer.ConsumeChar();
+                _streamConsumer.ConsumeCodePoint();
                 _parserState = TokenParserState.Data;
                 return GetCommentToken();
             default:
@@ -457,7 +464,7 @@ internal class HtmlTokenGenerator
     
     private HtmlToken? GetTokenFrom53DoctypeState()
     {
-        var (success, character) = _streamConsumer.TryGetCurrentChar();
+        var (success, codePoint) = _streamConsumer.TryGetCurrentCodePoint();
 
         if (!success)
         {
@@ -467,13 +474,13 @@ internal class HtmlTokenGenerator
             return GetDoctypeToken();
         }
         
-        switch (character)
+        switch (codePoint.Value)
         {
             case CharacterReference.CharacterTabulation:
             case CharacterReference.LineFeed:
             case CharacterReference.FormFeed:
             case CharacterReference.Space:
-                _streamConsumer.ConsumeChar();
+                _streamConsumer.ConsumeCodePoint();
                 _parserState = TokenParserState.BeforeDoctypeName;
                 return null;
             case CharacterReference.GreaterThanSign:
@@ -487,7 +494,7 @@ internal class HtmlTokenGenerator
     
     private HtmlToken? GetTokenFrom54BeforeDoctypeNameState()
     {
-        var (success, character) = _streamConsumer.TryGetCurrentChar();
+        var (success, codePoint) = _streamConsumer.TryGetCurrentCodePoint();
 
         if (!success)
         {
@@ -497,36 +504,36 @@ internal class HtmlTokenGenerator
             return GetDoctypeToken();
         }
         
-        switch (character)
+        switch (codePoint.Value)
         {
             case CharacterReference.CharacterTabulation:
             case CharacterReference.LineFeed:
             case CharacterReference.FormFeed:
             case CharacterReference.Space:
-                _streamConsumer.ConsumeChar();
+                _streamConsumer.ConsumeCodePoint();
                 return null;
-            case var _ when CharacterRangeReference.AsciiUpperAlpha.Contains(character):
-                _streamConsumer.ConsumeChar();
+            case var _ when CharacterRangeReference.AsciiUpperAlpha.Contains(codePoint):
+                _streamConsumer.ConsumeCodePoint();
                 CreateNewDoctypeToken();
-                _docTypeTokenBuilder.AppendToName(CharacterReference.ToAsciiLower(character));
+                _docTypeTokenBuilder.AppendToName(codePoint.ToAsciiLower());
                 _parserState = TokenParserState.DoctypeName;
                 return null;
             case CharacterReference.Null:
-                _streamConsumer.ConsumeChar();
+                _streamConsumer.ConsumeCodePoint();
                 CreateNewDoctypeToken();
-                _docTypeTokenBuilder.AppendToName(CharacterReference.ReplacementCharacter);
+                _docTypeTokenBuilder.AppendToName(UnicodeCodePoint.ReplacementCharacter);
                 _parserState = TokenParserState.DoctypeName;
                 return null;
             case CharacterReference.GreaterThanSign:
-                _streamConsumer.ConsumeChar();
+                _streamConsumer.ConsumeCodePoint();
                 CreateNewDoctypeToken();
                 _docTypeTokenBuilder.SetForceQuirks();
                 _parserState = TokenParserState.Data;
                 return GetDoctypeToken();
             default:
-                _streamConsumer.ConsumeChar();
+                _streamConsumer.ConsumeCodePoint();
                 CreateNewDoctypeToken();
-                _docTypeTokenBuilder.AppendToName(character);
+                _docTypeTokenBuilder.AppendToName(codePoint);
                 _parserState = TokenParserState.DoctypeName;
                 return null;
         }
@@ -534,7 +541,7 @@ internal class HtmlTokenGenerator
     
     private HtmlToken? GetTokenFrom55DoctypeNameState()
     {
-        var (success, character) = _streamConsumer.TryGetCurrentChar();
+        var (success, codePoint) = _streamConsumer.TryGetCurrentCodePoint();
 
         if (!success)
         {
@@ -543,37 +550,37 @@ internal class HtmlTokenGenerator
             return GetDoctypeToken();
         }
         
-        switch (character)
+        switch (codePoint.Value)
         {
             case CharacterReference.CharacterTabulation:
             case CharacterReference.LineFeed:
             case CharacterReference.FormFeed:
             case CharacterReference.Space:
-                _streamConsumer.ConsumeChar();
+                _streamConsumer.ConsumeCodePoint();
                 _parserState = TokenParserState.AfterDoctypeName;
                 return null;
             case CharacterReference.GreaterThanSign:
-                _streamConsumer.ConsumeChar();
+                _streamConsumer.ConsumeCodePoint();
                 _parserState = TokenParserState.Data;
                 return GetDoctypeToken();
-            case var _ when CharacterRangeReference.AsciiUpperAlpha.Contains(character):
-                _streamConsumer.ConsumeChar();
-                _docTypeTokenBuilder.AppendToName(CharacterReference.ToAsciiLower(character));
+            case var _ when CharacterRangeReference.AsciiUpperAlpha.Contains(codePoint):
+                _streamConsumer.ConsumeCodePoint();
+                _docTypeTokenBuilder.AppendToName(codePoint.ToAsciiLower());
                 return null;
             case CharacterReference.Null:
-                _streamConsumer.ConsumeChar();
-                _docTypeTokenBuilder.AppendToName(CharacterReference.ReplacementCharacter);
+                _streamConsumer.ConsumeCodePoint();
+                _docTypeTokenBuilder.AppendToName(UnicodeCodePoint.ReplacementCharacter);
                 return null;
             default:
-                _streamConsumer.ConsumeChar();
-                _docTypeTokenBuilder.AppendToName(character);
+                _streamConsumer.ConsumeCodePoint();
+                _docTypeTokenBuilder.AppendToName(codePoint);
                 return null;
         }
     }
     
     private HtmlToken? GetTokenFrom56AfterDoctypeNameState()
     {
-        var (success, character) = _streamConsumer.TryGetCurrentChar();
+        var (success, codePoint) = _streamConsumer.TryGetCurrentCodePoint();
 
         if (!success)
         {
@@ -582,16 +589,16 @@ internal class HtmlTokenGenerator
             return GetDoctypeToken();
         }
         
-        switch (character)
+        switch (codePoint.Value)
         {
             case CharacterReference.CharacterTabulation:
             case CharacterReference.LineFeed:
             case CharacterReference.FormFeed:
             case CharacterReference.Space:
-                _streamConsumer.ConsumeChar();
+                _streamConsumer.ConsumeCodePoint();
                 return null;
             case CharacterReference.GreaterThanSign:
-                _streamConsumer.ConsumeChar();
+                _streamConsumer.ConsumeCodePoint();
                 _parserState = TokenParserState.Data;
                 return GetDoctypeToken();
             default:
@@ -602,14 +609,14 @@ internal class HtmlTokenGenerator
                 {
                     if (StringReference.AsciiCaseInsensitiveEquals(result, StringReference.Public))
                     {
-                        _streamConsumer.ConsumeChar(StringReference.Public.Length);
+                        _streamConsumer.ConsumeCodePoint(StringReference.Public.Length);
                         _parserState = TokenParserState.AfterDoctypePublicKeyword;
                         return null;
                     }
                     
                     if (StringReference.AsciiCaseInsensitiveEquals(result, StringReference.System))
                     {
-                        _streamConsumer.ConsumeChar(StringReference.System.Length);
+                        _streamConsumer.ConsumeCodePoint(StringReference.System.Length);
                         _parserState = TokenParserState.AfterDoctypeSystemKeyword;
                         return null;
                     }
@@ -624,7 +631,7 @@ internal class HtmlTokenGenerator
     
     private HtmlToken? GetTokenFrom57AfterDoctypePublicKeywordState()
     {
-        var (success, character) = _streamConsumer.TryGetCurrentChar();
+        var (success, codePoint) = _streamConsumer.TryGetCurrentCodePoint();
 
         if (!success)
         {
@@ -633,27 +640,27 @@ internal class HtmlTokenGenerator
             return GetDoctypeToken();
         }
         
-        switch (character)
+        switch (codePoint.Value)
         {
             case CharacterReference.CharacterTabulation:
             case CharacterReference.LineFeed:
             case CharacterReference.FormFeed:
             case CharacterReference.Space:
-                _streamConsumer.ConsumeChar();
+                _streamConsumer.ConsumeCodePoint();
                 _parserState = TokenParserState.BeforeDoctypePublicIdentifier;
                 return null;
             case CharacterReference.QuotationMark:
-                _streamConsumer.ConsumeChar();
+                _streamConsumer.ConsumeCodePoint();
                 _docTypeTokenBuilder.SetPublicIdentifierPresent();
                 _parserState = TokenParserState.DoctypePublicIdentifierDoubleQuoted;
                 return null;
             case CharacterReference.Apostrophe:
-                _streamConsumer.ConsumeChar();
+                _streamConsumer.ConsumeCodePoint();
                 _docTypeTokenBuilder.SetPublicIdentifierPresent();
                 _parserState = TokenParserState.DoctypePublicIdentifierSingleQuoted;
                 return null;
             case CharacterReference.GreaterThanSign:
-                _streamConsumer.ConsumeChar();
+                _streamConsumer.ConsumeCodePoint();
                 _docTypeTokenBuilder.SetForceQuirks();
                 _parserState = TokenParserState.Data;
                 return GetDoctypeToken();
@@ -666,7 +673,7 @@ internal class HtmlTokenGenerator
     
     private HtmlToken? GetTokenFrom58BeforeDoctypePublicIdentifierState()
     {
-        var (success, character) = _streamConsumer.TryGetCurrentChar();
+        var (success, codePoint) = _streamConsumer.TryGetCurrentCodePoint();
 
         if (!success)
         {
@@ -675,26 +682,26 @@ internal class HtmlTokenGenerator
             return GetDoctypeToken();
         }
         
-        switch (character)
+        switch (codePoint.Value)
         {
             case CharacterReference.CharacterTabulation:
             case CharacterReference.LineFeed:
             case CharacterReference.FormFeed:
             case CharacterReference.Space:
-                _streamConsumer.ConsumeChar();
+                _streamConsumer.ConsumeCodePoint();
                 return null;
             case CharacterReference.QuotationMark:
-                _streamConsumer.ConsumeChar();
+                _streamConsumer.ConsumeCodePoint();
                 _docTypeTokenBuilder.SetPublicIdentifierPresent();
                 _parserState = TokenParserState.DoctypePublicIdentifierDoubleQuoted;
                 return null;
             case CharacterReference.Apostrophe:
-                _streamConsumer.ConsumeChar();
+                _streamConsumer.ConsumeCodePoint();
                 _docTypeTokenBuilder.SetPublicIdentifierPresent();
                 _parserState = TokenParserState.DoctypePublicIdentifierSingleQuoted;
                 return null;
             case CharacterReference.GreaterThanSign:
-                _streamConsumer.ConsumeChar();
+                _streamConsumer.ConsumeCodePoint();
                 _docTypeTokenBuilder.SetForceQuirks();
                 _parserState = TokenParserState.Data;
                 return GetDoctypeToken();
@@ -707,7 +714,7 @@ internal class HtmlTokenGenerator
     
     private HtmlToken? GetTokenFrom59DoctypePublicIdentifierDoubleQuotedState()
     {
-        var (success, character) = _streamConsumer.TryGetCurrentChar();
+        var (success, codePoint) = _streamConsumer.TryGetCurrentCodePoint();
 
         if (!success)
         {
@@ -716,31 +723,31 @@ internal class HtmlTokenGenerator
             return GetDoctypeToken();
         }
         
-        switch (character)
+        switch (codePoint.Value)
         {
             case CharacterReference.QuotationMark:
-                _streamConsumer.ConsumeChar();
+                _streamConsumer.ConsumeCodePoint();
                 _parserState = TokenParserState.AfterDoctypePublicIdentifier;
                 return null;
             case CharacterReference.Null:
-                _streamConsumer.ConsumeChar();
-                _docTypeTokenBuilder.AppendToPublicIdentifier(CharacterReference.ReplacementCharacter);
+                _streamConsumer.ConsumeCodePoint();
+                _docTypeTokenBuilder.AppendToPublicIdentifier(UnicodeCodePoint.ReplacementCharacter);
                 return null;
             case CharacterReference.GreaterThanSign:
-                _streamConsumer.ConsumeChar();
+                _streamConsumer.ConsumeCodePoint();
                 _docTypeTokenBuilder.SetForceQuirks();
                 _parserState = TokenParserState.Data;
                 return GetDoctypeToken();
             default:
-                _streamConsumer.ConsumeChar();
-                _docTypeTokenBuilder.AppendToPublicIdentifier(character);
+                _streamConsumer.ConsumeCodePoint();
+                _docTypeTokenBuilder.AppendToPublicIdentifier(codePoint);
                 return null;
         }
     }
     
     private HtmlToken? GetTokenFrom60DoctypePublicIdentifierSingleQuotedState()
     {
-        var (success, character) = _streamConsumer.TryGetCurrentChar();
+        var (success, codePoint) = _streamConsumer.TryGetCurrentCodePoint();
 
         if (!success)
         {
@@ -749,31 +756,31 @@ internal class HtmlTokenGenerator
             return GetDoctypeToken();
         }
         
-        switch (character)
+        switch (codePoint.Value)
         {
             case CharacterReference.Apostrophe:
-                _streamConsumer.ConsumeChar();
+                _streamConsumer.ConsumeCodePoint();
                 _parserState = TokenParserState.AfterDoctypePublicIdentifier;
                 return null;
             case CharacterReference.Null:
-                _streamConsumer.ConsumeChar();
-                _docTypeTokenBuilder.AppendToPublicIdentifier(CharacterReference.ReplacementCharacter);
+                _streamConsumer.ConsumeCodePoint();
+                _docTypeTokenBuilder.AppendToPublicIdentifier(UnicodeCodePoint.ReplacementCharacter);
                 return null;
             case CharacterReference.GreaterThanSign:
-                _streamConsumer.ConsumeChar();
+                _streamConsumer.ConsumeCodePoint();
                 _docTypeTokenBuilder.SetForceQuirks();
                 _parserState = TokenParserState.Data;
                 return GetDoctypeToken();
             default:
-                _streamConsumer.ConsumeChar();
-                _docTypeTokenBuilder.AppendToPublicIdentifier(character);
+                _streamConsumer.ConsumeCodePoint();
+                _docTypeTokenBuilder.AppendToPublicIdentifier(codePoint);
                 return null;
         }
     }
     
     private HtmlToken? GetTokenFrom61AfterDoctypePublicIdentifierState()
     {
-        var (success, character) = _streamConsumer.TryGetCurrentChar();
+        var (success, codePoint) = _streamConsumer.TryGetCurrentCodePoint();
 
         if (!success)
         {
@@ -782,26 +789,26 @@ internal class HtmlTokenGenerator
             return GetDoctypeToken();
         }
         
-        switch (character)
+        switch (codePoint.Value)
         {
             case CharacterReference.CharacterTabulation:
             case CharacterReference.LineFeed:
             case CharacterReference.FormFeed:
             case CharacterReference.Space:
-                _streamConsumer.ConsumeChar();
+                _streamConsumer.ConsumeCodePoint();
                 _parserState = TokenParserState.BetweenDoctypePublicAndSystemIdentifier;
                 return null;
             case CharacterReference.GreaterThanSign:
-                _streamConsumer.ConsumeChar();
+                _streamConsumer.ConsumeCodePoint();
                 _parserState = TokenParserState.Data;
                 return GetDoctypeToken();
             case CharacterReference.QuotationMark:
-                _streamConsumer.ConsumeChar();
+                _streamConsumer.ConsumeCodePoint();
                 _docTypeTokenBuilder.SetSystemIdentifierPresent();
                 _parserState = TokenParserState.DoctypeSystemIdentifierDoubleQuoted;
                 return null;
             case CharacterReference.Apostrophe:
-                _streamConsumer.ConsumeChar();
+                _streamConsumer.ConsumeCodePoint();
                 _docTypeTokenBuilder.SetSystemIdentifierPresent();
                 _parserState = TokenParserState.DoctypeSystemIdentifierSingleQuoted;
                 return null;
@@ -814,7 +821,7 @@ internal class HtmlTokenGenerator
     
     private HtmlToken? GetTokenFrom62BetweenDoctypePublicAndSystemIdentifiersState()
     {
-        var (success, character) = _streamConsumer.TryGetCurrentChar();
+        var (success, codePoint) = _streamConsumer.TryGetCurrentCodePoint();
 
         if (!success)
         {
@@ -823,25 +830,25 @@ internal class HtmlTokenGenerator
             return GetDoctypeToken();
         }
         
-        switch (character)
+        switch (codePoint.Value)
         {
             case CharacterReference.CharacterTabulation:
             case CharacterReference.LineFeed:
             case CharacterReference.FormFeed:
             case CharacterReference.Space:
-                _streamConsumer.ConsumeChar();
+                _streamConsumer.ConsumeCodePoint();
                 return null;
             case CharacterReference.GreaterThanSign:
-                _streamConsumer.ConsumeChar();
+                _streamConsumer.ConsumeCodePoint();
                 _parserState = TokenParserState.Data;
                 return GetDoctypeToken();
             case CharacterReference.QuotationMark:
-                _streamConsumer.ConsumeChar();
+                _streamConsumer.ConsumeCodePoint();
                 _docTypeTokenBuilder.SetSystemIdentifierPresent();
                 _parserState = TokenParserState.DoctypeSystemIdentifierDoubleQuoted;
                 return null;
             case CharacterReference.Apostrophe:
-                _streamConsumer.ConsumeChar();
+                _streamConsumer.ConsumeCodePoint();
                 _docTypeTokenBuilder.SetSystemIdentifierPresent();
                 _parserState = TokenParserState.DoctypeSystemIdentifierSingleQuoted;
                 return null;
@@ -854,7 +861,7 @@ internal class HtmlTokenGenerator
     
     private HtmlToken? GetTokenFrom63AfterDoctypeSystemKeywordState()
     {
-        var (success, character) = _streamConsumer.TryGetCurrentChar();
+        var (success, codePoint) = _streamConsumer.TryGetCurrentCodePoint();
 
         if (!success)
         {
@@ -863,27 +870,27 @@ internal class HtmlTokenGenerator
             return GetDoctypeToken();
         }
         
-        switch (character)
+        switch (codePoint.Value)
         {
             case CharacterReference.CharacterTabulation:
             case CharacterReference.LineFeed:
             case CharacterReference.FormFeed:
             case CharacterReference.Space:
-                _streamConsumer.ConsumeChar();
+                _streamConsumer.ConsumeCodePoint();
                 _parserState = TokenParserState.BeforeDoctypeSystemIdentifier;
                 return null;
             case CharacterReference.QuotationMark:
-                _streamConsumer.ConsumeChar();
+                _streamConsumer.ConsumeCodePoint();
                 _docTypeTokenBuilder.SetSystemIdentifierPresent();
                 _parserState = TokenParserState.DoctypeSystemIdentifierDoubleQuoted;
                 return null;
             case CharacterReference.Apostrophe:
-                _streamConsumer.ConsumeChar();
+                _streamConsumer.ConsumeCodePoint();
                 _docTypeTokenBuilder.SetSystemIdentifierPresent();
                 _parserState = TokenParserState.DoctypeSystemIdentifierSingleQuoted;
                 return null;
             case CharacterReference.GreaterThanSign:
-                _streamConsumer.ConsumeChar();
+                _streamConsumer.ConsumeCodePoint();
                 _docTypeTokenBuilder.SetForceQuirks();
                 _parserState = TokenParserState.Data;
                 return GetDoctypeToken();
@@ -896,7 +903,7 @@ internal class HtmlTokenGenerator
     
     private HtmlToken? GetTokenFrom64BeforeDoctypeSystemIdentifierState()
     {
-        var (success, character) = _streamConsumer.TryGetCurrentChar();
+        var (success, codePoint) = _streamConsumer.TryGetCurrentCodePoint();
 
         if (!success)
         {
@@ -905,26 +912,26 @@ internal class HtmlTokenGenerator
             return GetDoctypeToken();
         }
         
-        switch (character)
+        switch (codePoint.Value)
         {
             case CharacterReference.CharacterTabulation:
             case CharacterReference.LineFeed:
             case CharacterReference.FormFeed:
             case CharacterReference.Space:
-                _streamConsumer.ConsumeChar();
+                _streamConsumer.ConsumeCodePoint();
                 return null;
             case CharacterReference.QuotationMark:
-                _streamConsumer.ConsumeChar();
+                _streamConsumer.ConsumeCodePoint();
                 _docTypeTokenBuilder.SetSystemIdentifierPresent();
                 _parserState = TokenParserState.DoctypeSystemIdentifierDoubleQuoted;
                 return null;
             case CharacterReference.Apostrophe:
-                _streamConsumer.ConsumeChar();
+                _streamConsumer.ConsumeCodePoint();
                 _docTypeTokenBuilder.SetSystemIdentifierPresent();
                 _parserState = TokenParserState.DoctypeSystemIdentifierSingleQuoted;
                 return null;
             case CharacterReference.GreaterThanSign:
-                _streamConsumer.ConsumeChar();
+                _streamConsumer.ConsumeCodePoint();
                 _docTypeTokenBuilder.SetForceQuirks();
                 _parserState = TokenParserState.Data;
                 return GetDoctypeToken();
@@ -937,7 +944,7 @@ internal class HtmlTokenGenerator
     
     private HtmlToken? GetTokenFrom65DoctypeSystemIdentifierDoubleQuotedState()
     {
-        var (success, character) = _streamConsumer.TryGetCurrentChar();
+        var (success, codePoint) = _streamConsumer.TryGetCurrentCodePoint();
 
         if (!success)
         {
@@ -946,31 +953,31 @@ internal class HtmlTokenGenerator
             return GetDoctypeToken();
         }
         
-        switch (character)
+        switch (codePoint.Value)
         {
             case CharacterReference.QuotationMark:
-                _streamConsumer.ConsumeChar();
+                _streamConsumer.ConsumeCodePoint();
                 _parserState = TokenParserState.AfterDoctypeSystemIdentifier;
                 return null;
             case CharacterReference.Null:
-                _streamConsumer.ConsumeChar();
-                _docTypeTokenBuilder.AppendToSystemIdentifier(CharacterReference.ReplacementCharacter);
+                _streamConsumer.ConsumeCodePoint();
+                _docTypeTokenBuilder.AppendToSystemIdentifier(UnicodeCodePoint.ReplacementCharacter);
                 return null;
             case CharacterReference.GreaterThanSign:
-                _streamConsumer.ConsumeChar();
+                _streamConsumer.ConsumeCodePoint();
                 _docTypeTokenBuilder.SetForceQuirks();
                 _parserState = TokenParserState.Data;
                 return GetDoctypeToken();
             default:
-                _streamConsumer.ConsumeChar();
-                _docTypeTokenBuilder.AppendToSystemIdentifier(character);
+                _streamConsumer.ConsumeCodePoint();
+                _docTypeTokenBuilder.AppendToSystemIdentifier(codePoint);
                 return null;
         }
     }
     
     private HtmlToken? GetTokenFrom66DoctypeSystemIdentifierSingleQuotedState()
     {
-        var (success, character) = _streamConsumer.TryGetCurrentChar();
+        var (success, codePoint) = _streamConsumer.TryGetCurrentCodePoint();
 
         if (!success)
         {
@@ -979,31 +986,31 @@ internal class HtmlTokenGenerator
             return GetDoctypeToken();
         }
         
-        switch (character)
+        switch (codePoint.Value)
         {
             case CharacterReference.Apostrophe:
-                _streamConsumer.ConsumeChar();
+                _streamConsumer.ConsumeCodePoint();
                 _parserState = TokenParserState.AfterDoctypeSystemIdentifier;
                 return null;
             case CharacterReference.Null:
-                _streamConsumer.ConsumeChar();
-                _docTypeTokenBuilder.AppendToSystemIdentifier(CharacterReference.ReplacementCharacter);
+                _streamConsumer.ConsumeCodePoint();
+                _docTypeTokenBuilder.AppendToSystemIdentifier(UnicodeCodePoint.ReplacementCharacter);
                 return null;
             case CharacterReference.GreaterThanSign:
-                _streamConsumer.ConsumeChar();
+                _streamConsumer.ConsumeCodePoint();
                 _docTypeTokenBuilder.SetForceQuirks();
                 _parserState = TokenParserState.Data;
                 return GetDoctypeToken();
             default:
-                _streamConsumer.ConsumeChar();
-                _docTypeTokenBuilder.AppendToSystemIdentifier(character);
+                _streamConsumer.ConsumeCodePoint();
+                _docTypeTokenBuilder.AppendToSystemIdentifier(codePoint);
                 return null;
         }
     }
     
     private HtmlToken? GetTokenFrom67AfterDoctypeSystemIdentifierState()
     {
-        var (success, character) = _streamConsumer.TryGetCurrentChar();
+        var (success, codePoint) = _streamConsumer.TryGetCurrentCodePoint();
 
         if (!success)
         {
@@ -1012,16 +1019,16 @@ internal class HtmlTokenGenerator
             return GetDoctypeToken();
         }
         
-        switch (character)
+        switch (codePoint.Value)
         {
             case CharacterReference.CharacterTabulation:
             case CharacterReference.LineFeed:
             case CharacterReference.FormFeed:
             case CharacterReference.Space:
-                _streamConsumer.ConsumeChar();
+                _streamConsumer.ConsumeCodePoint();
                 return null;
             case CharacterReference.GreaterThanSign:
-                _streamConsumer.ConsumeChar();
+                _streamConsumer.ConsumeCodePoint();
                 _parserState = TokenParserState.Data;
                 return GetDoctypeToken();
             default:
@@ -1032,7 +1039,7 @@ internal class HtmlTokenGenerator
     
     private HtmlToken? GetTokenFrom68BogusDoctypeState()
     {
-        var (success, character) = _streamConsumer.TryGetCurrentChar();
+        var (success, codePoint) = _streamConsumer.TryGetCurrentCodePoint();
 
         if (!success)
         {
@@ -1040,47 +1047,49 @@ internal class HtmlTokenGenerator
             return GetDoctypeToken();
         }
         
-        switch (character)
+        switch (codePoint.Value)
         {
             case CharacterReference.GreaterThanSign:
-                _streamConsumer.ConsumeChar();
+                _streamConsumer.ConsumeCodePoint();
                 _parserState = TokenParserState.Data;
                 return GetDoctypeToken();
             case CharacterReference.Null:
-                _streamConsumer.ConsumeChar();
+                _streamConsumer.ConsumeCodePoint();
                 return null;
             default:
-                _streamConsumer.ConsumeChar();
+                _streamConsumer.ConsumeCodePoint();
                 return null;
         }
     }
 
     private HtmlToken? GetTokenFrom72CharacterReferenceState()
     {
-        _temporaryBuffer = new StringBuilder();
-        _temporaryBuffer.Append(CharacterReference.Ampersand);
+        _temporaryBuffer = new List<UnicodeCodePoint>();
+        _temporaryBuffer.Add(new UnicodeCodePoint(CharacterReference.Ampersand));
         
-        var (success, character) = _streamConsumer.TryGetCurrentChar();
+        var (success, codePoint) = _streamConsumer.TryGetCurrentCodePoint();
 
         if (!success)
         {
+            FlushCodePointsConsumedAsACharacterReference();
             _parserState = _returnState;
-            return FlushCodePointsConsumedAsACharacterReference();
+            return null;
         }
 
-        switch (character)
+        switch (codePoint.Value)
         {
-            case var _ when CharacterRangeReference.AsciiAlphaNumeric.Contains(character):
+            case var _ when CharacterRangeReference.AsciiAlphaNumeric.Contains(codePoint):
                 _parserState = TokenParserState.NamedCharacterReference;
                 return null;
             case CharacterReference.NumberSign:
-                _streamConsumer.ConsumeChar();
-                _temporaryBuffer.Append(character);
+                _streamConsumer.ConsumeCodePoint();
+                _temporaryBuffer.Add(codePoint);
                 _parserState = TokenParserState.NumericCharacterReference;
                 return null;
             default:
+                FlushCodePointsConsumedAsACharacterReference();
                 _parserState = _returnState;
-                return FlushCodePointsConsumedAsACharacterReference();
+                return null;
         }
     }
 
@@ -1127,20 +1136,20 @@ internal class HtmlTokenGenerator
                 if (success)
                 {
                     var nextInputChar = result[^1];
-                    historical = nextInputChar == CharacterReference.EqualsSign || CharacterRangeReference.AsciiAlphaNumeric.Contains(nextInputChar);
+                    historical = nextInputChar == CharacterReference.EqualsSign || CharacterRangeReference.AsciiAlphaNumeric.Contains(new UnicodeCodePoint(nextInputChar));
                 }
             }
 
             if (historical)
             {
-                _temporaryBuffer = new StringBuilder(match);
+                _temporaryBuffer = UnicodeCodePoint.ConvertFromString(match).ToList();
             }
             else
             {
-                _temporaryBuffer = new StringBuilder(NamedEntityReference.Entities[match].Characters);
+                _temporaryBuffer = NamedEntityReference.Entities[match].CodePoints.Select(c => new UnicodeCodePoint(c)).ToList();
             }
             
-            _streamConsumer.ConsumeChar(match.Length - 1);
+            _streamConsumer.ConsumeCodePoint(match.Length - 1);
             
             _parserState = _returnState;
         }
@@ -1149,12 +1158,13 @@ internal class HtmlTokenGenerator
             _parserState = TokenParserState.AmbiguousAmpersand;
         }
 
-        return FlushCodePointsConsumedAsACharacterReference();
+        FlushCodePointsConsumedAsACharacterReference();
+        return null;
     }
 
     private HtmlToken? GetTokenFrom74AmbiguousAmpersandState()
     {
-        var (success, character) = _streamConsumer.TryGetCurrentChar();
+        var (success, codePoint) = _streamConsumer.TryGetCurrentCodePoint();
 
         if (!success)
         {
@@ -1162,18 +1172,18 @@ internal class HtmlTokenGenerator
             return null;
         }
 
-        switch (character)
+        switch (codePoint.Value)
         {
-            case var _ when CharacterRangeReference.AsciiAlphaNumeric.Contains(character):
-                _streamConsumer.ConsumeChar();
+            case var _ when CharacterRangeReference.AsciiAlphaNumeric.Contains(codePoint):
+                _streamConsumer.ConsumeCodePoint();
                 
                 if (ConsumedAsPartOfAnAttribute())
                 {
-                    _htmlTokenAttributeBuilder.AppendToValue(character);
+                    _htmlTokenAttributeBuilder.AppendToValue(codePoint);
                     return null;
                 }
 
-                return new CharacterToken { Data = character.ToString() };
+                return new CharacterToken { Data = codePoint.ToString() };
             case CharacterReference.SemiColon:
                 _parserState = _returnState;
                 return null;
@@ -1187,7 +1197,7 @@ internal class HtmlTokenGenerator
     {
         _characterReferenceCode = 0;
         
-        var (success, character) = _streamConsumer.TryGetCurrentChar();
+        var (success, codePoint) = _streamConsumer.TryGetCurrentCodePoint();
 
         if (!success)
         {
@@ -1195,12 +1205,12 @@ internal class HtmlTokenGenerator
             return null;
         }
 
-        switch (character)
+        switch (codePoint.Value)
         {
             case CharacterReference.LowerCaseX:
             case CharacterReference.UpperCaseX:
-                _streamConsumer.ConsumeChar();
-                _temporaryBuffer.Append(character);
+                _streamConsumer.ConsumeCodePoint();
+                _temporaryBuffer.Add(codePoint);
                 _parserState = TokenParserState.HexadecimalCharacterReferenceStart;
                 return null;
             default:
@@ -1211,49 +1221,53 @@ internal class HtmlTokenGenerator
     
     private HtmlToken? GetTokenFrom76HexadecimalCharacterReferenceStartState()
     {
-        var (success, character) = _streamConsumer.TryGetCurrentChar();
+        var (success, codePoint) = _streamConsumer.TryGetCurrentCodePoint();
 
         if (!success)
         {
+            FlushCodePointsConsumedAsACharacterReference();
             _parserState = _returnState;
-            return FlushCodePointsConsumedAsACharacterReference();
+            return null;
         }
 
-        switch (character)
+        switch (codePoint.Value)
         {
-            case var _ when CharacterRangeReference.AsciiHex.Contains(character):
+            case var _ when CharacterRangeReference.AsciiHex.Contains(codePoint):
                 _parserState = TokenParserState.HexadecimalCharacterReference;
                 return null;
             default:
+                FlushCodePointsConsumedAsACharacterReference();
                 _parserState = _returnState;
-                return FlushCodePointsConsumedAsACharacterReference();
+                return null;
         }
     }
     
     private HtmlToken? GetTokenFrom77DecimalCharacterReferenceStartState()
     {
-        var (success, character) = _streamConsumer.TryGetCurrentChar();
+        var (success, codePoint) = _streamConsumer.TryGetCurrentCodePoint();
 
         if (!success)
         {
+            FlushCodePointsConsumedAsACharacterReference();
             _parserState = _returnState;
-            return FlushCodePointsConsumedAsACharacterReference();
+            return null;
         }
 
-        switch (character)
+        switch (codePoint.Value)
         {
-            case var _ when CharacterRangeReference.AsciiDigit.Contains(character):
+            case var _ when CharacterRangeReference.AsciiDigit.Contains(codePoint):
                 _parserState = TokenParserState.DecimalCharacterReference;
                 return null;
             default:
+                FlushCodePointsConsumedAsACharacterReference();
                 _parserState = _returnState;
-                return FlushCodePointsConsumedAsACharacterReference();
+                return null;
         }
     }
     
     private HtmlToken? GetTokenFrom78HexadecimalCharacterReferenceState()
     {
-        var (success, character) = _streamConsumer.TryGetCurrentChar();
+        var (success, codePoint) = _streamConsumer.TryGetCurrentCodePoint();
 
         if (!success)
         {
@@ -1261,22 +1275,22 @@ internal class HtmlTokenGenerator
             return null;
         }
 
-        switch (character)
+        switch (codePoint.Value)
         {
-            case var _ when CharacterRangeReference.AsciiDigit.Contains(character):
-                _streamConsumer.ConsumeChar();
-                ShiftAndIncrementCharacterReferenceCode(16, character - 0x30);
+            case var _ when CharacterRangeReference.AsciiDigit.Contains(codePoint):
+                _streamConsumer.ConsumeCodePoint();
+                ShiftAndIncrementCharacterReferenceCode(16, codePoint.Value - 0x30);
                 return null;
-            case var _ when CharacterRangeReference.AsciiUpperHexLetter.Contains(character):
-                _streamConsumer.ConsumeChar();
-                ShiftAndIncrementCharacterReferenceCode(16, character - 0x37);
+            case var _ when CharacterRangeReference.AsciiUpperHexLetter.Contains(codePoint):
+                _streamConsumer.ConsumeCodePoint();
+                ShiftAndIncrementCharacterReferenceCode(16, codePoint.Value - 0x37);
                 return null;
-            case var _ when CharacterRangeReference.AsciiLowerHexLetter.Contains(character):
-                _streamConsumer.ConsumeChar();
-                ShiftAndIncrementCharacterReferenceCode(16, character - 0x57);
+            case var _ when CharacterRangeReference.AsciiLowerHexLetter.Contains(codePoint):
+                _streamConsumer.ConsumeCodePoint();
+                ShiftAndIncrementCharacterReferenceCode(16, codePoint.Value - 0x57);
                 return null;
             case CharacterReference.SemiColon:
-                _streamConsumer.ConsumeChar();
+                _streamConsumer.ConsumeCodePoint();
                 _parserState = TokenParserState.NumericCharacterReferenceEnd;
                 return null;
             default:
@@ -1287,7 +1301,7 @@ internal class HtmlTokenGenerator
     
     private HtmlToken? GetTokenFrom79DecimalCharacterReferenceState()
     {
-        var (success, character) = _streamConsumer.TryGetCurrentChar();
+        var (success, codePoint) = _streamConsumer.TryGetCurrentCodePoint();
 
         if (!success)
         {
@@ -1295,14 +1309,14 @@ internal class HtmlTokenGenerator
             return null;
         }
 
-        switch (character)
+        switch (codePoint.Value)
         {
-            case var _ when CharacterRangeReference.AsciiDigit.Contains(character):
-                _streamConsumer.ConsumeChar();
-                ShiftAndIncrementCharacterReferenceCode(10, character - 0x30);
+            case var _ when CharacterRangeReference.AsciiDigit.Contains(codePoint):
+                _streamConsumer.ConsumeCodePoint();
+                ShiftAndIncrementCharacterReferenceCode(10, codePoint.Value - 0x30);
                 return null;
             case CharacterReference.SemiColon:
-                _streamConsumer.ConsumeChar();
+                _streamConsumer.ConsumeCodePoint();
                 _parserState = TokenParserState.NumericCharacterReferenceEnd;
                 return null;
             default:
@@ -1347,7 +1361,7 @@ internal class HtmlTokenGenerator
         {
             _characterReferenceCode = CharacterReference.ReplacementCharacter;
         } 
-        else if (_characterReferenceCode > MaxCodeReference)
+        else if (_characterReferenceCode > UnicodeCodePoint.MaxCodePoint)
         {
             _characterReferenceCode = CharacterReference.ReplacementCharacter;
         }
@@ -1360,12 +1374,11 @@ internal class HtmlTokenGenerator
             _characterReferenceCode = replacementCodePoint;
         }
 
-        var codePoint = char.ConvertFromUtf32(_characterReferenceCode);
-        _temporaryBuffer = new StringBuilder(codePoint);
-
+        _temporaryBuffer = new List<UnicodeCodePoint> { new UnicodeCodePoint(_characterReferenceCode) };
+        FlushCodePointsConsumedAsACharacterReference();
         _parserState = _returnState;
         
-        return FlushCodePointsConsumedAsACharacterReference();
+        return null;
     }
 
     private void CreateNewCommentToken()
@@ -1404,16 +1417,17 @@ internal class HtmlTokenGenerator
         return _htmlTokenAttribute;
     }
 
-    private HtmlToken? FlushCodePointsConsumedAsACharacterReference()
+    private void FlushCodePointsConsumedAsACharacterReference()
     {
         if (ConsumedAsPartOfAnAttribute())
         {
-            _htmlTokenAttributeBuilder.AppendToValue(_temporaryBuffer.ToString());
-            return null;
+            _htmlTokenAttributeBuilder.AppendToValue(UnicodeCodePoint.ConvertToString(_temporaryBuffer));
         }
-
-        var characterToken = new CharacterToken { Data = _temporaryBuffer.ToString() };
-        return characterToken;
+        else
+        {
+            var tokens = _temporaryBuffer.Select(c => new CharacterToken { Data = c.ToString() });
+            _flushedCharacterTokens.AddRange(tokens);
+        }
     }
 
     private bool ConsumedAsPartOfAnAttribute()
@@ -1423,7 +1437,7 @@ internal class HtmlTokenGenerator
 
     private void ShiftAndIncrementCharacterReferenceCode(int shift, int increment)
     {
-        if (_characterReferenceCode <= MaxCodeReference)
+        if (_characterReferenceCode <= UnicodeCodePoint.MaxCodePoint)
         {
             _characterReferenceCode *= shift;
             _characterReferenceCode += increment;

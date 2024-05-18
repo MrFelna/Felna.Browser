@@ -23,11 +23,11 @@ public class UTF8StreamConsumerTestRunner
         var consumer = new UTF8StreamConsumer(stream);
         
         // act
-        var (success, character) = consumer.TryGetCurrentChar();
+        var (success, character) = consumer.TryGetCurrentCodePoint();
         
         // assert
         Assert.IsTrue(success);
-        Assert.AreEqual(expected, character);
+        Assert.AreEqual(new UnicodeCodePoint(expected), character);
     }
 
     [TestMethod]
@@ -39,7 +39,7 @@ public class UTF8StreamConsumerTestRunner
         var consumer = new UTF8StreamConsumer(stream);
         
         // act
-        var (success, result) = consumer.LookAhead(2);
+        var (success, result) = consumer.LookAhead(1);
         
         // assert
         Assert.IsTrue(success);
@@ -61,8 +61,8 @@ public class UTF8StreamConsumerTestRunner
         var consumer = new UTF8StreamConsumer(stream);
         
         // act
-        var (success1, character1) = consumer.TryGetCurrentChar();
-        var (success2, character2) = consumer.TryGetCurrentChar();
+        var (success1, character1) = consumer.TryGetCurrentCodePoint();
+        var (success2, character2) = consumer.TryGetCurrentCodePoint();
         
         // assert
         Assert.IsTrue(success1);
@@ -108,12 +108,12 @@ public class UTF8StreamConsumerTestRunner
         var consumer = new UTF8StreamConsumer(stream);
         
         // act
-        consumer.ConsumeChar(consumeCount);
-        var (actualSuccess, actualCharacter) = consumer.TryGetCurrentChar();
+        consumer.ConsumeCodePoint(consumeCount);
+        var (actualSuccess, actualCharacter) = consumer.TryGetCurrentCodePoint();
         
         // assert
         Assert.AreEqual(expectedSuccess, actualSuccess);
-        Assert.AreEqual(expectedCharacter, actualCharacter);
+        Assert.AreEqual(new UnicodeCodePoint(expectedCharacter), actualCharacter);
     }
 
     [TestMethod]
@@ -131,7 +131,7 @@ public class UTF8StreamConsumerTestRunner
         var consumer = new UTF8StreamConsumer(stream);
         
         // act
-        consumer.ConsumeChar(consumeCount);
+        consumer.ConsumeCodePoint(consumeCount);
         var (actualSuccess, actualResult) = consumer.LookAhead(lookAheadCount);
         
         // assert
@@ -157,7 +157,7 @@ public class UTF8StreamConsumerTestRunner
         var consumer = new UTF8StreamConsumer(stream);
         
         // act
-        Assert.ThrowsException<ArgumentOutOfRangeException>(() => consumer.ConsumeChar(charCount));
+        Assert.ThrowsException<ArgumentOutOfRangeException>(() => consumer.ConsumeCodePoint(charCount));
     }
     
     [TestMethod]
@@ -186,13 +186,13 @@ public class UTF8StreamConsumerTestRunner
         var consumer = new UTF8StreamConsumer(stream);
         
         // act
-        var (charSuccess, charResult) = consumer.TryGetCurrentChar();
+        var (charSuccess, charResult) = consumer.TryGetCurrentCodePoint();
         var (stringSuccess, stringResult) = consumer.LookAhead(1);
         
         // assert
         Assert.IsFalse(charSuccess);
         Assert.IsFalse(stringSuccess);
-        Assert.AreEqual(CharacterReference.ReplacementCharacter, charResult);
+        Assert.AreEqual(UnicodeCodePoint.ReplacementCharacter, charResult);
         Assert.AreEqual(string.Empty, stringResult);
     }
 }

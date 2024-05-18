@@ -5,39 +5,40 @@ namespace Felna.Browser.DocumentParsers.Tests.HtmlTokenGeneratorTests;
 
 public class TestStreamConsumer : IStreamConsumer
 {
-    private readonly string _source;
+    private readonly List<UnicodeCodePoint> _codePoints;
     
-    private int _currentCharIndex;
+    private int _currentCodePointIndex;
 
     public TestStreamConsumer(string source)
     {
-        _source = source;
+        ArgumentNullException.ThrowIfNull(source);
+        _codePoints = new List<UnicodeCodePoint>(UnicodeCodePoint.ConvertFromString(source));
     }
 
-    public (bool Success, char character) TryGetCurrentChar()
+    public (bool Success, UnicodeCodePoint CodePoint) TryGetCurrentCodePoint()
     {
-        if (_currentCharIndex >= _source.Length)
-            return (false, CharacterReference.ReplacementCharacter);
+        if (_currentCodePointIndex >= _codePoints.Count)
+            return (false, UnicodeCodePoint.ReplacementCharacter);
 
-        return (true, _source[_currentCharIndex]);
+        return (true, _codePoints[_currentCodePointIndex]);
     }
 
-    public (bool Success, string result) LookAhead(int charCount)
+    public (bool Success, string result) LookAhead(int codePointCount)
     {
-        if (charCount < 1)
-            throw new ArgumentOutOfRangeException(nameof(charCount), "Char count must be at least 1");
+        if (codePointCount < 1)
+            throw new ArgumentOutOfRangeException(nameof(codePointCount), "Code point count must be at least 1");
 
-        if (_currentCharIndex + charCount - 1 >= _source.Length)
+        if (_currentCodePointIndex + codePointCount - 1 >= _codePoints.Count)
             return (false, string.Empty);
 
-        return (true, _source.Substring(_currentCharIndex, charCount));
+        return (true, UnicodeCodePoint.ConvertToString(_codePoints.GetRange(_currentCodePointIndex, codePointCount)));
     }
 
-    public void ConsumeChar(int charCount = 1)
+    public void ConsumeCodePoint(int codePointCount = 1)
     {
-        if (charCount < 1)
-            throw new ArgumentOutOfRangeException(nameof(charCount), "Char count must be at least 1");
+        if (codePointCount < 1)
+            throw new ArgumentOutOfRangeException(nameof(codePointCount), "Code point count must be at least 1");
 
-        _currentCharIndex += charCount;
+        _currentCodePointIndex += codePointCount;
     }
 }

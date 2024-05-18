@@ -1,4 +1,5 @@
 ﻿using System.Text;
+using Felna.Browser.DocumentParsers.TextReferences;
 
 namespace Felna.Browser.DocumentParsers.HtmlTokens;
 
@@ -17,13 +18,13 @@ internal class DocTypeTokenBuilder
         return this;
     }
 
-    public void AppendToName(char c) => _nameBuilder.Append(c);
+    public void AppendToName(UnicodeCodePoint c) => _nameBuilder.Append(c.ToString());
 
-    public void AppendToPublicIdentifier(char c) => _publicIdentifierBuilder.Append(c);
+    public void AppendToPublicIdentifier(UnicodeCodePoint c) => _publicIdentifierBuilder.Append(c.ToString());
 
     public void SetPublicIdentifierPresent() => _publicIdentifierPresent = true;
 
-    public void AppendToSystemIdentifier(char c) => _systemIdentifierBuilder.Append(c);
+    public void AppendToSystemIdentifier(UnicodeCodePoint c) => _systemIdentifierBuilder.Append(c.ToString());
 
     public void SetSystemIdentifierPresent() => _systemIdentifierPresent = true;
 
