@@ -16,8 +16,8 @@ internal class HtmlTokenGenerator
     private DocTypeTokenBuilder _docTypeTokenBuilder = new DocTypeTokenBuilder();
     private DocTypeToken? _docTypeToken;
 
-    private HtmlTokenAttributeBuilder _htmlTokenAttributeBuilder = new HtmlTokenAttributeBuilder();
-    private HtmlTokenAttribute? _htmlTokenAttribute;
+    private TagTokenBuilder _tagTokenBuilder = new TagTokenBuilder();
+    private TagToken? _tagToken;
 
     private List<UnicodeCodePoint> _temporaryBuffer = new List<UnicodeCodePoint>();
     private readonly List<CharacterToken> _flushedCharacterTokens = new List<CharacterToken>();
@@ -47,6 +47,17 @@ internal class HtmlTokenGenerator
             {
                 TokenParserState.Data => GetTokenFrom01DataState(),
                 TokenParserState.TagOpen => GetTokenFrom06TagOpenState(),
+                TokenParserState.EndTagOpen => GetTokenFrom07EndTagOpenState(),
+                TokenParserState.TagName => GetTokenFrom08TagNameState(),
+                TokenParserState.BeforeAttributeName => GetTokenFrom32BeforeAttributeNameState(),
+                TokenParserState.AttributeName => GetTokenFrom33AttributeNameState(),
+                TokenParserState.AfterAttributeName => GetTokenFrom34AfterAttributeNameState(),
+                TokenParserState.BeforeAttributeValueState => GetTokenFrom35BeforeAttributeValueState(),
+                TokenParserState.AttributeValueDoubleQuoted => GetTokenFrom36AttributeValueDoubleQuotedState(),
+                TokenParserState.AttributeValueSingleQuoted => GetTokenFrom37AttributeValueSingleQuotedState(),
+                TokenParserState.AttributeValueUnquoted => GetTokenFrom38AttributeValueUnquotedState(),
+                TokenParserState.AfterAttributeValueQuoted => GetTokenFrom39AfterAttributeValueQuotedState(),
+                TokenParserState.SelfClosingStartTag => GetTokenFrom40SelfClosingStartTagState(),
                 TokenParserState.BogusComment => GetTokenFrom41BogusCommentState(),
                 TokenParserState.MarkupDeclarationOpen => GetTokenFrom42MarkupDeclarationOpenState(),
                 TokenParserState.CommentStart => GetTokenFrom43CommentStartState(),
@@ -135,17 +146,398 @@ internal class HtmlTokenGenerator
                 _parserState = TokenParserState.MarkupDeclarationOpen;
                 return null;
             case CharacterReference.Solidus:
-                throw new NotImplementedException();
+                _streamConsumer.ConsumeCodePoint();
+                _parserState = TokenParserState.EndTagOpen;
+                return null;
             case var _ when CharacterRangeReference.AsciiAlpha.Contains(codePoint):
-                throw new NotImplementedException();
+                CreateNewTagToken();
+                _parserState = TokenParserState.TagName;
+                return null;
             case CharacterReference.QuestionMark:
                 CreateNewCommentToken();
                 _parserState = TokenParserState.BogusComment;
                 return null;
-            case CharacterReference.Null:
-                throw new NotImplementedException();
             default:
-                throw new NotImplementedException();
+                _parserState = TokenParserState.Data;
+                return new CharacterToken { Data = CharacterReference.LessThanSign.ToString() };
+        }
+    }
+    
+    private HtmlToken? GetTokenFrom07EndTagOpenState()
+    {
+        var (success, codePoint) = _streamConsumer.TryGetCurrentCodePoint();
+
+        if (!success)
+        {
+            _flushedCharacterTokens.Add(new CharacterToken{ Data = CharacterReference.Solidus.ToString() });
+            _parserState = TokenParserState.Data; // so the final token is EOF
+            return new CharacterToken{ Data = CharacterReference.LessThanSign.ToString() };
+        }
+        
+        switch (codePoint.Value)
+        {
+            case var _ when CharacterRangeReference.AsciiAlpha.Contains(codePoint):
+                CreateNewTagToken();
+                _tagTokenBuilder.SetEndTag();
+                _parserState = TokenParserState.TagName;
+                return null;
+            case CharacterReference.GreaterThanSign:
+                _streamConsumer.ConsumeCodePoint();
+                _parserState = TokenParserState.Data;
+                return null;
+            default:
+                CreateNewCommentToken();
+                _parserState = TokenParserState.BogusComment;
+                return null;
+        }
+    }
+    
+    private HtmlToken? GetTokenFrom08TagNameState()
+    {
+        var (success, codePoint) = _streamConsumer.TryGetCurrentCodePoint();
+
+        if (!success)
+        {
+            _parserState = TokenParserState.Data; // so the next token is EOF
+            return null;
+        }
+        
+        switch (codePoint.Value)
+        {
+            case CharacterReference.CharacterTabulation:
+            case CharacterReference.LineFeed:
+            case CharacterReference.FormFeed:
+            case CharacterReference.Space:
+                _streamConsumer.ConsumeCodePoint();
+                _parserState = TokenParserState.BeforeAttributeName;
+                return null;
+            case CharacterReference.Solidus:
+                _streamConsumer.ConsumeCodePoint();
+                _parserState = TokenParserState.SelfClosingStartTag;
+                return null;
+            case CharacterReference.GreaterThanSign:
+                _streamConsumer.ConsumeCodePoint();
+                _parserState = TokenParserState.Data;
+                return GetTagToken();
+            case var _ when CharacterRangeReference.AsciiUpperAlpha.Contains(codePoint):
+                _streamConsumer.ConsumeCodePoint();
+                _tagTokenBuilder.AppendToTagName(codePoint.ToAsciiLower());
+                return null;
+            case CharacterReference.Null:
+                _streamConsumer.ConsumeCodePoint();
+                _tagTokenBuilder.AppendToTagName(CharacterReference.ReplacementCharacter.ToString());
+                return null;
+            default:
+                _streamConsumer.ConsumeCodePoint();
+                _tagTokenBuilder.AppendToTagName(codePoint);
+                return null;
+        }
+    }
+    
+    private HtmlToken? GetTokenFrom32BeforeAttributeNameState()
+    {
+        var (success, codePoint) = _streamConsumer.TryGetCurrentCodePoint();
+
+        if (!success)
+        {
+            _parserState = TokenParserState.AfterAttributeName;
+            return null;
+        }
+        
+        switch (codePoint.Value)
+        {
+            case CharacterReference.CharacterTabulation:
+            case CharacterReference.LineFeed:
+            case CharacterReference.FormFeed:
+            case CharacterReference.Space:
+                _streamConsumer.ConsumeCodePoint();
+                return null;
+            case CharacterReference.Solidus:
+            case CharacterReference.GreaterThanSign:
+                _parserState = TokenParserState.AfterAttributeName;
+                return null;
+            case CharacterReference.EqualsSign:
+                _streamConsumer.ConsumeCodePoint();
+                _tagTokenBuilder.StartNewAttribute();
+                _tagTokenBuilder.AppendToTagName(codePoint);
+                _parserState = TokenParserState.AttributeName;
+                return null;
+            default:
+                _tagTokenBuilder.StartNewAttribute();
+                _parserState = TokenParserState.AttributeName;
+                return null;
+        }
+    }
+    
+    private HtmlToken? GetTokenFrom33AttributeNameState()
+    {
+        var (success, codePoint) = _streamConsumer.TryGetCurrentCodePoint();
+
+        if (!success)
+        {
+            _parserState = TokenParserState.AfterAttributeName;
+            return null;
+        }
+        
+        switch (codePoint.Value)
+        {
+            case CharacterReference.CharacterTabulation:
+            case CharacterReference.LineFeed:
+            case CharacterReference.FormFeed:
+            case CharacterReference.Space:
+            case CharacterReference.Solidus:
+            case CharacterReference.GreaterThanSign:
+                _parserState = TokenParserState.AfterAttributeName;
+                return null;
+            case CharacterReference.EqualsSign:
+                _streamConsumer.ConsumeCodePoint();
+                _parserState = TokenParserState.BeforeAttributeValueState;
+                return null;
+            case var _ when CharacterRangeReference.AsciiUpperAlpha.Contains(codePoint):
+                _streamConsumer.ConsumeCodePoint();
+                _tagTokenBuilder.AppendToAttributeName(codePoint.ToAsciiLower());
+                return null;
+            case CharacterReference.Null:
+                _streamConsumer.ConsumeCodePoint();
+                _tagTokenBuilder.AppendToAttributeName(CharacterReference.ReplacementCharacter.ToString());
+                return null;
+            default:
+                _streamConsumer.ConsumeCodePoint();
+                _tagTokenBuilder.AppendToAttributeName(codePoint);
+                return null;
+        }
+    }
+    
+    private HtmlToken? GetTokenFrom34AfterAttributeNameState()
+    {
+        var (success, codePoint) = _streamConsumer.TryGetCurrentCodePoint();
+
+        if (!success)
+        {
+            _parserState = TokenParserState.Data; // So that the next token is EOF
+            return null;
+        }
+        
+        switch (codePoint.Value)
+        {
+            case CharacterReference.CharacterTabulation:
+            case CharacterReference.LineFeed:
+            case CharacterReference.FormFeed:
+            case CharacterReference.Space:
+                _streamConsumer.ConsumeCodePoint();
+                return null;
+            case CharacterReference.Solidus:
+                _streamConsumer.ConsumeCodePoint();
+                _parserState = TokenParserState.SelfClosingStartTag;
+                return null;
+            case CharacterReference.EqualsSign:
+                _streamConsumer.ConsumeCodePoint();
+                _parserState = TokenParserState.BeforeAttributeValueState;
+                return null;
+            case CharacterReference.GreaterThanSign:
+                _parserState = TokenParserState.Data;
+                return GetTagToken();
+            default:
+                _tagTokenBuilder.StartNewAttribute();
+                _parserState = TokenParserState.AttributeName;
+                return null;
+        }
+    }
+    
+    private HtmlToken? GetTokenFrom35BeforeAttributeValueState()
+    {
+        var (success, codePoint) = _streamConsumer.TryGetCurrentCodePoint();
+
+        if (!success)
+        {
+            _parserState = TokenParserState.AttributeValueUnquoted;
+            return null;
+        }
+        
+        switch (codePoint.Value)
+        {
+            case CharacterReference.CharacterTabulation:
+            case CharacterReference.LineFeed:
+            case CharacterReference.FormFeed:
+            case CharacterReference.Space:
+                _streamConsumer.ConsumeCodePoint();
+                return null;
+            case CharacterReference.QuotationMark:
+                _streamConsumer.ConsumeCodePoint();
+                _parserState = TokenParserState.AttributeValueDoubleQuoted;
+                return null;
+            case CharacterReference.Apostrophe:
+                _streamConsumer.ConsumeCodePoint();
+                _parserState = TokenParserState.AttributeValueSingleQuoted;
+                return null;
+            case CharacterReference.GreaterThanSign:
+                _parserState = TokenParserState.Data;
+                return GetTagToken();
+            default:
+                _parserState = TokenParserState.AttributeValueUnquoted;
+                return null;
+        }
+    }
+    
+    private HtmlToken? GetTokenFrom36AttributeValueDoubleQuotedState()
+    {
+        var (success, codePoint) = _streamConsumer.TryGetCurrentCodePoint();
+
+        if (!success)
+        {
+            _parserState = TokenParserState.Data; // So that next token is EOF
+            return null;
+        }
+        
+        switch (codePoint.Value)
+        {
+            case CharacterReference.QuotationMark:
+                _streamConsumer.ConsumeCodePoint();
+                _parserState = TokenParserState.AfterAttributeValueQuoted;
+                return null;
+            case CharacterReference.Ampersand:
+                _streamConsumer.ConsumeCodePoint();
+                _returnState = TokenParserState.AttributeValueDoubleQuoted;
+                _parserState = TokenParserState.CharacterReference;
+                return null;
+            case CharacterReference.Null:
+                _streamConsumer.ConsumeCodePoint();
+                _tagTokenBuilder.AppendToAttributeValue(CharacterReference.ReplacementCharacter.ToString());
+                return null;
+            default:
+                _streamConsumer.ConsumeCodePoint();
+                _tagTokenBuilder.AppendToAttributeValue(codePoint);
+                return null;
+        }
+    }
+    
+    private HtmlToken? GetTokenFrom37AttributeValueSingleQuotedState()
+    {
+        var (success, codePoint) = _streamConsumer.TryGetCurrentCodePoint();
+
+        if (!success)
+        {
+            _parserState = TokenParserState.Data; // So that next token is EOF
+            return null;
+        }
+        
+        switch (codePoint.Value)
+        {
+            case CharacterReference.Apostrophe:
+                _streamConsumer.ConsumeCodePoint();
+                _parserState = TokenParserState.AfterAttributeValueQuoted;
+                return null;
+            case CharacterReference.Ampersand:
+                _streamConsumer.ConsumeCodePoint();
+                _returnState = TokenParserState.AttributeValueSingleQuoted;
+                _parserState = TokenParserState.CharacterReference;
+                return null;
+            case CharacterReference.Null:
+                _streamConsumer.ConsumeCodePoint();
+                _tagTokenBuilder.AppendToAttributeValue(CharacterReference.ReplacementCharacter.ToString());
+                return null;
+            default:
+                _streamConsumer.ConsumeCodePoint();
+                _tagTokenBuilder.AppendToAttributeValue(codePoint);
+                return null;
+        }
+    }
+    
+    private HtmlToken? GetTokenFrom38AttributeValueUnquotedState()
+    {
+        var (success, codePoint) = _streamConsumer.TryGetCurrentCodePoint();
+
+        if (!success)
+        {
+            _parserState = TokenParserState.Data; // So that next token is EOF
+            return null;
+        }
+        
+        switch (codePoint.Value)
+        {
+            case CharacterReference.CharacterTabulation:
+            case CharacterReference.LineFeed:
+            case CharacterReference.FormFeed:
+            case CharacterReference.Space:
+                _streamConsumer.ConsumeCodePoint();
+                _parserState = TokenParserState.BeforeAttributeName;
+                return null;
+            case CharacterReference.Ampersand:
+                _streamConsumer.ConsumeCodePoint();
+                _returnState = TokenParserState.AttributeValueUnquoted;
+                _parserState = TokenParserState.CharacterReference;
+                return null;
+            case CharacterReference.GreaterThanSign:
+                _streamConsumer.ConsumeCodePoint();
+                _parserState = TokenParserState.Data;
+                return GetTagToken();
+            case CharacterReference.Null:
+                _streamConsumer.ConsumeCodePoint();
+                _tagTokenBuilder.AppendToAttributeValue(CharacterReference.ReplacementCharacter.ToString());
+                return null;
+            default:
+                _streamConsumer.ConsumeCodePoint();
+                _tagTokenBuilder.AppendToAttributeValue(codePoint);
+                return null;
+        }
+    }
+    
+    private HtmlToken? GetTokenFrom39AfterAttributeValueQuotedState()
+    {
+        var (success, codePoint) = _streamConsumer.TryGetCurrentCodePoint();
+
+        if (!success)
+        {
+            _parserState = TokenParserState.Data; // So that next token is EOF
+            return null;
+        }
+        
+        switch (codePoint.Value)
+        {
+            case CharacterReference.CharacterTabulation:
+            case CharacterReference.LineFeed:
+            case CharacterReference.FormFeed:
+            case CharacterReference.Space:
+                _streamConsumer.ConsumeCodePoint();
+                _parserState = TokenParserState.BeforeAttributeName;
+                return null;
+            case CharacterReference.Solidus:
+                _streamConsumer.ConsumeCodePoint();
+                _parserState = TokenParserState.SelfClosingStartTag;
+                return null;
+            case CharacterReference.GreaterThanSign:
+                _streamConsumer.ConsumeCodePoint();
+                _parserState = TokenParserState.Data;
+                return GetTagToken();
+            case CharacterReference.Null:
+                _streamConsumer.ConsumeCodePoint();
+                _tagTokenBuilder.AppendToAttributeValue(CharacterReference.ReplacementCharacter.ToString());
+                return null;
+            default:
+                _parserState = TokenParserState.BeforeAttributeName;
+                return null;
+        }
+    }
+    
+    private HtmlToken? GetTokenFrom40SelfClosingStartTagState()
+    {
+        var (success, codePoint) = _streamConsumer.TryGetCurrentCodePoint();
+
+        if (!success)
+        {
+            _parserState = TokenParserState.Data; // So that next token is EOF
+            return null;
+        }
+        
+        switch (codePoint.Value)
+        {
+            case CharacterReference.GreaterThanSign:
+                _streamConsumer.ConsumeCodePoint();
+                _parserState = TokenParserState.Data;
+                return GetTagToken();
+            default:
+                _parserState = TokenParserState.BeforeAttributeName;
+                return null;
         }
     }
 
@@ -1179,7 +1571,7 @@ internal class HtmlTokenGenerator
                 
                 if (ConsumedAsPartOfAnAttribute())
                 {
-                    _htmlTokenAttributeBuilder.AppendToValue(codePoint);
+                    _tagTokenBuilder.AppendToAttributeValue(codePoint);
                     return null;
                 }
 
@@ -1405,23 +1797,23 @@ internal class HtmlTokenGenerator
         return _docTypeToken;
     }
     
-    private void CreateNewHtmlTokenAttributeToken()
+    private void CreateNewTagToken()
     {
-        _htmlTokenAttributeBuilder = new HtmlTokenAttributeBuilder();
-        _htmlTokenAttribute = null;
+        _tagTokenBuilder = new TagTokenBuilder();
+        _tagToken = null;
     }
 
-    private HtmlTokenAttribute GetHtmlTokenAttributeToken()
+    private TagToken GetTagToken()
     {
-        _htmlTokenAttribute ??= _htmlTokenAttributeBuilder.Build();
-        return _htmlTokenAttribute;
+        _tagToken ??= _tagTokenBuilder.Build();
+        return _tagToken;
     }
 
     private void FlushCodePointsConsumedAsACharacterReference()
     {
         if (ConsumedAsPartOfAnAttribute())
         {
-            _htmlTokenAttributeBuilder.AppendToValue(UnicodeCodePoint.ConvertToString(_temporaryBuffer));
+            _tagTokenBuilder.AppendToAttributeValue(UnicodeCodePoint.ConvertToString(_temporaryBuffer));
         }
         else
         {
@@ -1432,7 +1824,7 @@ internal class HtmlTokenGenerator
 
     private bool ConsumedAsPartOfAnAttribute()
     {
-        return _returnState != TokenParserState.Data; // TODO update once appropriate states added
+        return _returnState is TokenParserState.AttributeValueDoubleQuoted or TokenParserState.AttributeValueSingleQuoted or TokenParserState.AttributeValueUnquoted;
     }
 
     private void ShiftAndIncrementCharacterReferenceCode(int shift, int increment)

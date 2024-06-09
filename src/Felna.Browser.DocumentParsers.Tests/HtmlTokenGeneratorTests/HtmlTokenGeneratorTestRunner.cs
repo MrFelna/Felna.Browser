@@ -108,6 +108,12 @@ public static class HtmlTokenGeneratorTestRunner
                     PublicIdentifier = jObject["publicidentifier"]?.Value<string>(),
                     SystemIdentifier = jObject["systemidentifier"]?.Value<string>(),
                 },
+                "tag" => new TagToken
+                {
+                    Name = jObject["name"]?.Value<string>() ?? "",
+                    IsEndTag = jObject["isendtag"]?.Value<bool>() ?? false,
+                    SelfClosing = jObject["selfclosing"]?.Value<bool>() ?? false,
+                },
                 _ => null
             };
 
