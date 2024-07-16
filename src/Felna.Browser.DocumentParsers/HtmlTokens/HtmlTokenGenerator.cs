@@ -335,6 +335,7 @@ internal class HtmlTokenGenerator
                 _parserState = TokenParserState.BeforeAttributeValueState;
                 return null;
             case CharacterReference.GreaterThanSign:
+                _streamConsumer.ConsumeCodePoint();
                 _parserState = TokenParserState.Data;
                 return GetTagToken();
             default:
@@ -533,6 +534,7 @@ internal class HtmlTokenGenerator
         {
             case CharacterReference.GreaterThanSign:
                 _streamConsumer.ConsumeCodePoint();
+                _tagTokenBuilder.SetSelfClosing();
                 _parserState = TokenParserState.Data;
                 return GetTagToken();
             default:
