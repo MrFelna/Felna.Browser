@@ -32,11 +32,11 @@ internal class TagTokenBuilder
     
     public void AppendToAttributeName(UnicodeCodePoint c) => AppendToAttributeName(c.ToString());
     
-    public void AppendToAttributeName(string s) => _tagNameBuilder.Append(s);
+    public void AppendToAttributeName(string s) => _attributeNameBuilder.Append(s);
 
     public void AppendToAttributeValue(UnicodeCodePoint c) => AppendToAttributeValue(c.ToString());
     
-    public void AppendToAttributeValue(string s) => _tagNameBuilder.Append(s);
+    public void AppendToAttributeValue(string s) => _attributeValueBuilder.Append(s);
 
     public void SetEndTag() => _endTag = true;
 

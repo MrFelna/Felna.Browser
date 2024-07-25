@@ -259,7 +259,7 @@ internal class HtmlTokenGenerator
             case CharacterReference.EqualsSign:
                 _streamConsumer.ConsumeCodePoint();
                 _tagTokenBuilder.StartNewAttribute();
-                _tagTokenBuilder.AppendToTagName(codePoint);
+                _tagTokenBuilder.AppendToAttributeName(codePoint);
                 _parserState = TokenParserState.AttributeName;
                 return null;
             default:

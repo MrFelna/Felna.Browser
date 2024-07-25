@@ -118,7 +118,21 @@ public static class HtmlTokenGeneratorTestRunner
             };
 
             if (newToken is not null)
+            {
+                if (jObject["attributes"] is JObject attrObject)
+                {
+                    foreach (var property in attrObject.Properties())
+                    {
+                        var attribute = new HtmlTokenAttribute
+                        {
+                            Name = property.Name, 
+                            Value = property.Value.Value<string>() ?? string.Empty,
+                        };
+                        newToken.TokenAttributes.Add(attribute);
+                    }
+                }
                 tokens.Add(newToken);
+            }
         }
 
         return tokens.AsReadOnly();
