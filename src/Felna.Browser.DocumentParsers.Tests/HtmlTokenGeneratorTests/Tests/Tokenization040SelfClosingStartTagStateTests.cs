@@ -12,8 +12,6 @@ public class Tokenization040SelfClosingStartTagStateTests
     [DataRow("<p/", "[]")]
     [DataRow("<p a/", "[]")]
     [DataRow("<p a='b'/", "[]")]
-    [DataRow("<p a=\"\"", "[]")]
-    [DataRow("<p a=''", "[]")]
     // Anything else
     [DataRow("<p//>", @"[{""type"":""tag"",""name"":""p"",""selfclosing"":true}]")]
     [DataRow("<p a//>", @"[{""type"":""tag"",""name"":""p"",""selfclosing"":true,""attributes"":{""a"":""""}}]")]

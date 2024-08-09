@@ -511,10 +511,6 @@ internal class HtmlTokenGenerator
                 _streamConsumer.ConsumeCodePoint();
                 _parserState = TokenParserState.Data;
                 return GetTagToken();
-            case CharacterReference.Null:
-                _streamConsumer.ConsumeCodePoint();
-                _tagTokenBuilder.AppendToAttributeValue(CharacterReference.ReplacementCharacter.ToString());
-                return null;
             default:
                 _parserState = TokenParserState.BeforeAttributeName;
                 return null;
