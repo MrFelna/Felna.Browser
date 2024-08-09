@@ -17,9 +17,9 @@ public class Tokenization035BeforeAttributeValueStateTests
     // Apostrophe
     [DataRow("<p a='b'>", @"[{""type"":""tag"",""name"":""p"",""attributes"":{""a"":""b""}}]")]
     // Greater-than sign
-    [DataRow("<p a>", @"[{""type"":""tag"",""name"":""p"",""attributes"":{""a"":""""}}]")]
+    [DataRow("<p a=>", @"[{""type"":""tag"",""name"":""p"",""attributes"":{""a"":""""}}]")]
     // EOF
-    [DataRow("<p a ", "[]")]
+    [DataRow("<p a=", "[]")]
     // Anything else
     [DataRow("<p a=b>", @"[{""type"":""tag"",""name"":""p"",""attributes"":{""a"":""b""}}]")]
     public void GivenHtmlCorrectTokensGenerated(string html, string json)
