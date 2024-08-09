@@ -32,6 +32,7 @@ public class Tokenization038AttributeValueUnquotedStateTests
     [DataRow("<p a=b", "[]")]
     // Anything else
     [DataRow("<p a=b1>", @"[{""type"":""tag"",""name"":""p"",""attributes"":{""a"":""b1""}}]")]
+    [DataRow("<p a=b/>", @"[{""type"":""tag"",""name"":""p"",""attributes"":{""a"":""b/""}}]")]
     public void GivenHtmlCorrectTokensGenerated(string html, string json)
     {
         var tokens = HtmlTokenGeneratorTestRunner.ConvertJsonToTokens(json);
