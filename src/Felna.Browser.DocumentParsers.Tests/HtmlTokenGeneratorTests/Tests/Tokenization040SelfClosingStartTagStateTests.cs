@@ -1,7 +1,7 @@
 ﻿namespace Felna.Browser.DocumentParsers.Tests.HtmlTokenGeneratorTests.Tests;
 
 [TestClass]
-public class Tokenization039SelfClosingStartTagStateTests
+public class Tokenization040SelfClosingStartTagStateTests
 {
     [TestMethod]
     // Greater-than sign
@@ -12,6 +12,8 @@ public class Tokenization039SelfClosingStartTagStateTests
     [DataRow("<p/", "[]")]
     [DataRow("<p a/", "[]")]
     [DataRow("<p a='b'/", "[]")]
+    [DataRow("<p a=\"\"", "[]")]
+    [DataRow("<p a=''", "[]")]
     // Anything else
     [DataRow("<p//>", @"[{""type"":""tag"",""name"":""p"",""selfclosing"":true}]")]
     [DataRow("<p a//>", @"[{""type"":""tag"",""name"":""p"",""selfclosing"":true,""attributes"":{""a"":""""}}]")]
