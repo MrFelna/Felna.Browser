@@ -1,6 +1,9 @@
-﻿using System.Text;
+﻿using System.Diagnostics;
+using System.Text;
 using Felna.Browser.DocumentParsers.StreamConsumers;
 using Felna.Browser.DocumentParsers.TextReferences;
+using static Felna.Browser.DocumentParsers.HtmlTokens.TokenParserState;
+using static Felna.Browser.DocumentParsers.TextReferences.CharacterReference;
 
 namespace Felna.Browser.DocumentParsers.HtmlTokens;
 
@@ -20,576 +23,498 @@ internal class HtmlTokenGenerator
     private TagToken? _tagToken;
 
     private List<UnicodeCodePoint> _temporaryBuffer = new List<UnicodeCodePoint>();
-    private readonly List<CharacterToken> _flushedCharacterTokens = new List<CharacterToken>();
+    private readonly Queue<HtmlToken> _tokensToEmit = new Queue<HtmlToken>();
     private int _characterReferenceCode;
+
+    private (bool Success, UnicodeCodePoint CodePoint) _currentCharacter = new(false, UnicodeCodePoint.ReplacementCharacter);
+    private bool _reconsumeFlag;
+
+    private bool _eofFlag;
 
     internal HtmlTokenGenerator(IStreamConsumer streamConsumer)
     {
         _streamConsumer = streamConsumer;
-        _parserState = TokenParserState.Data;
-        _returnState = TokenParserState.Data;
+        _parserState = Data;
+        _returnState = Data;
     }
 
     internal HtmlToken GetNextToken()
     {
-        HtmlToken? token = null;
+        if (_eofFlag)
+            return new EndOfFileToken();
 
         do
         {
-            if (_flushedCharacterTokens.Any())
+            if (_tokensToEmit.TryDequeue(out var token))
             {
-                var characterToken = _flushedCharacterTokens.First();
-                _flushedCharacterTokens.Remove(characterToken);
-                return characterToken;
+                _eofFlag = token is EndOfFileToken;
+                return token;
             }
             
-            token = _parserState switch
+            var stateHandler = _parserState switch
             {
-                TokenParserState.Data => GetTokenFrom01DataState(),
-                TokenParserState.TagOpen => GetTokenFrom06TagOpenState(),
-                TokenParserState.EndTagOpen => GetTokenFrom07EndTagOpenState(),
-                TokenParserState.TagName => GetTokenFrom08TagNameState(),
-                TokenParserState.BeforeAttributeName => GetTokenFrom32BeforeAttributeNameState(),
-                TokenParserState.AttributeName => GetTokenFrom33AttributeNameState(),
-                TokenParserState.AfterAttributeName => GetTokenFrom34AfterAttributeNameState(),
-                TokenParserState.BeforeAttributeValueState => GetTokenFrom35BeforeAttributeValueState(),
-                TokenParserState.AttributeValueDoubleQuoted => GetTokenFrom36AttributeValueDoubleQuotedState(),
-                TokenParserState.AttributeValueSingleQuoted => GetTokenFrom37AttributeValueSingleQuotedState(),
-                TokenParserState.AttributeValueUnquoted => GetTokenFrom38AttributeValueUnquotedState(),
-                TokenParserState.AfterAttributeValueQuoted => GetTokenFrom39AfterAttributeValueQuotedState(),
-                TokenParserState.SelfClosingStartTag => GetTokenFrom40SelfClosingStartTagState(),
-                TokenParserState.BogusComment => GetTokenFrom41BogusCommentState(),
-                TokenParserState.MarkupDeclarationOpen => GetTokenFrom42MarkupDeclarationOpenState(),
-                TokenParserState.CommentStart => GetTokenFrom43CommentStartState(),
-                TokenParserState.CommentStartDash => GetTokenFrom44CommentStartDashState(),
-                TokenParserState.Comment => GetTokenFrom45CommentState(),
-                TokenParserState.CommentLessThanSign => GetTokenFrom46CommentLessThanSignState(),
-                TokenParserState.CommentLessThanSignBang => GetTokenFrom47CommentLessThanSignBangState(),
-                TokenParserState.CommentLessThanSignBangDash => GetTokenFrom48CommentLessThanSignBangDashState(),
-                TokenParserState.CommentLessThanSignBangDashDash => GetTokenFrom49CommentLessThanSignBangDashDashState(),
-                TokenParserState.CommentEndDash => GetTokenFrom50CommentEndDashState(),
-                TokenParserState.CommentEnd => GetTokenFrom51CommentEndState(),
-                TokenParserState.CommentEndBang => GetTokenFrom52CommentEndBangState(),
-                TokenParserState.Doctype => GetTokenFrom53DoctypeState(),
-                TokenParserState.BeforeDoctypeName => GetTokenFrom54BeforeDoctypeNameState(),
-                TokenParserState.DoctypeName => GetTokenFrom55DoctypeNameState(),
-                TokenParserState.AfterDoctypeName => GetTokenFrom56AfterDoctypeNameState(),
-                TokenParserState.AfterDoctypePublicKeyword => GetTokenFrom57AfterDoctypePublicKeywordState(),
-                TokenParserState.BeforeDoctypePublicIdentifier => GetTokenFrom58BeforeDoctypePublicIdentifierState(),
-                TokenParserState.DoctypePublicIdentifierDoubleQuoted => GetTokenFrom59DoctypePublicIdentifierDoubleQuotedState(),
-                TokenParserState.DoctypePublicIdentifierSingleQuoted => GetTokenFrom60DoctypePublicIdentifierSingleQuotedState(),
-                TokenParserState.AfterDoctypePublicIdentifier => GetTokenFrom61AfterDoctypePublicIdentifierState(),
-                TokenParserState.BetweenDoctypePublicAndSystemIdentifier => GetTokenFrom62BetweenDoctypePublicAndSystemIdentifiersState(),
-                TokenParserState.AfterDoctypeSystemKeyword => GetTokenFrom63AfterDoctypeSystemKeywordState(),
-                TokenParserState.BeforeDoctypeSystemIdentifier => GetTokenFrom64BeforeDoctypeSystemIdentifierState(),
-                TokenParserState.DoctypeSystemIdentifierDoubleQuoted => GetTokenFrom65DoctypeSystemIdentifierDoubleQuotedState(),
-                TokenParserState.DoctypeSystemIdentifierSingleQuoted => GetTokenFrom66DoctypeSystemIdentifierSingleQuotedState(),
-                TokenParserState.AfterDoctypeSystemIdentifier => GetTokenFrom67AfterDoctypeSystemIdentifierState(),
-                TokenParserState.BogusDoctype => GetTokenFrom68BogusDoctypeState(),
-                TokenParserState.CharacterReference => GetTokenFrom72CharacterReferenceState(),
-                TokenParserState.NamedCharacterReference => GetTokenFrom73NamedCharacterReferenceState(),
-                TokenParserState.AmbiguousAmpersand => GetTokenFrom74AmbiguousAmpersandState(),
-                TokenParserState.NumericCharacterReference => GetTokenFrom75NumericCharacterReferenceState(),
-                TokenParserState.HexadecimalCharacterReferenceStart => GetTokenFrom76HexadecimalCharacterReferenceStartState(),
-                TokenParserState.DecimalCharacterReferenceStart => GetTokenFrom77DecimalCharacterReferenceStartState(),
-                TokenParserState.HexadecimalCharacterReference => GetTokenFrom78HexadecimalCharacterReferenceState(),
-                TokenParserState.DecimalCharacterReference => GetTokenFrom79DecimalCharacterReferenceState(),
-                TokenParserState.NumericCharacterReferenceEnd => GetTokenFrom80NumericCharacterReferenceEndState(),
-                _ => throw new NotImplementedException()
+                Data => (Action)GetTokenFrom01DataState,
+                TagOpen => GetTokenFrom06TagOpenState,
+                EndTagOpen => GetTokenFrom07EndTagOpenState,
+                TagName => GetTokenFrom08TagNameState,
+                BeforeAttributeName => GetTokenFrom32BeforeAttributeNameState,
+                AttributeName => GetTokenFrom33AttributeNameState,
+                AfterAttributeName => GetTokenFrom34AfterAttributeNameState,
+                BeforeAttributeValueState => GetTokenFrom35BeforeAttributeValueState,
+                AttributeValueDoubleQuoted => GetTokenFrom36AttributeValueDoubleQuotedState,
+                AttributeValueSingleQuoted => GetTokenFrom37AttributeValueSingleQuotedState,
+                AttributeValueUnquoted => GetTokenFrom38AttributeValueUnquotedState,
+                AfterAttributeValueQuoted => GetTokenFrom39AfterAttributeValueQuotedState,
+                SelfClosingStartTag => GetTokenFrom40SelfClosingStartTagState,
+                BogusComment => GetTokenFrom41BogusCommentState,
+                MarkupDeclarationOpen => GetTokenFrom42MarkupDeclarationOpenState,
+                CommentStart => GetTokenFrom43CommentStartState,
+                CommentStartDash => GetTokenFrom44CommentStartDashState,
+                Comment => GetTokenFrom45CommentState,
+                CommentLessThanSign => GetTokenFrom46CommentLessThanSignState,
+                CommentLessThanSignBang => GetTokenFrom47CommentLessThanSignBangState,
+                CommentLessThanSignBangDash => GetTokenFrom48CommentLessThanSignBangDashState,
+                CommentLessThanSignBangDashDash => GetTokenFrom49CommentLessThanSignBangDashDashState,
+                CommentEndDash => GetTokenFrom50CommentEndDashState,
+                CommentEnd => GetTokenFrom51CommentEndState,
+                CommentEndBang => GetTokenFrom52CommentEndBangState,
+                Doctype => GetTokenFrom53DoctypeState,
+                BeforeDoctypeName => GetTokenFrom54BeforeDoctypeNameState,
+                DoctypeName => GetTokenFrom55DoctypeNameState,
+                AfterDoctypeName => GetTokenFrom56AfterDoctypeNameState,
+                AfterDoctypePublicKeyword => GetTokenFrom57AfterDoctypePublicKeywordState,
+                BeforeDoctypePublicIdentifier => GetTokenFrom58BeforeDoctypePublicIdentifierState,
+                DoctypePublicIdentifierDoubleQuoted => GetTokenFrom59DoctypePublicIdentifierDoubleQuotedState,
+                DoctypePublicIdentifierSingleQuoted => GetTokenFrom60DoctypePublicIdentifierSingleQuotedState,
+                AfterDoctypePublicIdentifier => GetTokenFrom61AfterDoctypePublicIdentifierState,
+                BetweenDoctypePublicAndSystemIdentifier => GetTokenFrom62BetweenDoctypePublicAndSystemIdentifiersState,
+                AfterDoctypeSystemKeyword => GetTokenFrom63AfterDoctypeSystemKeywordState,
+                BeforeDoctypeSystemIdentifier => GetTokenFrom64BeforeDoctypeSystemIdentifierState,
+                DoctypeSystemIdentifierDoubleQuoted => GetTokenFrom65DoctypeSystemIdentifierDoubleQuotedState,
+                DoctypeSystemIdentifierSingleQuoted => GetTokenFrom66DoctypeSystemIdentifierSingleQuotedState,
+                AfterDoctypeSystemIdentifier => GetTokenFrom67AfterDoctypeSystemIdentifierState,
+                BogusDoctype => GetTokenFrom68BogusDoctypeState,
+                TokenParserState.CharacterReference => GetTokenFrom72CharacterReferenceState,
+                NamedCharacterReference => GetTokenFrom73NamedCharacterReferenceState,
+                AmbiguousAmpersand => GetTokenFrom74AmbiguousAmpersandState,
+                NumericCharacterReference => GetTokenFrom75NumericCharacterReferenceState,
+                HexadecimalCharacterReferenceStart => GetTokenFrom76HexadecimalCharacterReferenceStartState,
+                DecimalCharacterReferenceStart => GetTokenFrom77DecimalCharacterReferenceStartState,
+                HexadecimalCharacterReference => GetTokenFrom78HexadecimalCharacterReferenceState,
+                DecimalCharacterReference => GetTokenFrom79DecimalCharacterReferenceState,
+                NumericCharacterReferenceEnd => GetTokenFrom80NumericCharacterReferenceEndState,
+                _ => throw new InvalidOperationException(),
             };
-        } while (token is null);
-
-        return token;
+            
+            stateHandler.Invoke();
+            
+        } while (true);
     }
 
-    private HtmlToken? GetTokenFrom01DataState()
+    private void GetTokenFrom01DataState()
     {
-        var (success, codePoint) = _streamConsumer.TryGetCurrentCodePoint();
-
-        if (!success)
-            return new EndOfFileToken();
+        var (success, codePoint) = ConsumeNextInputCharacter();
         
         switch (codePoint.Value)
         {
-            case CharacterReference.Ampersand:
-                _streamConsumer.ConsumeCodePoint();
-                _returnState = TokenParserState.Data;
-                _parserState = TokenParserState.CharacterReference;
-                return null;
-            case CharacterReference.LessThanSign:
-                _streamConsumer.ConsumeCodePoint();
-                _parserState = TokenParserState.TagOpen;
-                return null;
-            case CharacterReference.Null:
-                _streamConsumer.ConsumeCodePoint();
-                return new CharacterToken { Data = codePoint.ToString() };
+            case Ampersand:
+                SetReturnStateTo(Data);
+                SwitchTo(TokenParserState.CharacterReference);
+                return;
+            case LessThanSign:
+                SwitchTo(TagOpen);
+                return;
+            case Null:
+                Emit(new CharacterToken { Data = codePoint.ToString() });
+                return;
+            case var _ when !success:
+                Emit(new EndOfFileToken());
+                return;
             default:
-                _streamConsumer.ConsumeCodePoint();
-                return new CharacterToken { Data = codePoint.ToString() };
+                Emit(new CharacterToken { Data = codePoint.ToString() });
+                return;
         }
     }
 
-    private HtmlToken? GetTokenFrom06TagOpenState()
+    private void GetTokenFrom06TagOpenState()
     {
-        var (success, codePoint) = _streamConsumer.TryGetCurrentCodePoint();
-
-        if (!success)
-        {
-            _parserState = TokenParserState.Data; // so the next token is EOF
-            return new CharacterToken{ Data = CharacterReference.LessThanSign.ToString() };
-        }
+        var (success, codePoint) = ConsumeNextInputCharacter();
         
         switch (codePoint.Value)
         {
-            case CharacterReference.ExclamationMark:
-                _streamConsumer.ConsumeCodePoint();
-                _parserState = TokenParserState.MarkupDeclarationOpen;
-                return null;
-            case CharacterReference.Solidus:
-                _streamConsumer.ConsumeCodePoint();
-                _parserState = TokenParserState.EndTagOpen;
-                return null;
+            case ExclamationMark:
+                SwitchTo(MarkupDeclarationOpen);
+                return;
+            case Solidus:
+                SwitchTo(EndTagOpen);
+                return;
             case var _ when CharacterRangeReference.AsciiAlpha.Contains(codePoint):
                 CreateNewTagToken();
-                _parserState = TokenParserState.TagName;
-                return null;
-            case CharacterReference.QuestionMark:
+                ReconsumeIn(TagName);
+                return;
+            case QuestionMark:
                 CreateNewCommentToken();
-                _parserState = TokenParserState.BogusComment;
-                return null;
+                ReconsumeIn(BogusComment);
+                return;
+            case var _ when !success:
+                Emit(new CharacterToken{ Data = LessThanSign.ToString() }, new EndOfFileToken());
+                return;
             default:
-                _parserState = TokenParserState.Data;
-                return new CharacterToken { Data = CharacterReference.LessThanSign.ToString() };
+                Emit(new CharacterToken { Data = LessThanSign.ToString() });
+                ReconsumeIn(Data);
+                return;
         }
     }
     
-    private HtmlToken? GetTokenFrom07EndTagOpenState()
+    private void GetTokenFrom07EndTagOpenState()
     {
-        var (success, codePoint) = _streamConsumer.TryGetCurrentCodePoint();
-
-        if (!success)
-        {
-            _flushedCharacterTokens.Add(new CharacterToken{ Data = CharacterReference.Solidus.ToString() });
-            _parserState = TokenParserState.Data; // so the final token is EOF
-            return new CharacterToken{ Data = CharacterReference.LessThanSign.ToString() };
-        }
+        var (success, codePoint) = ConsumeNextInputCharacter();
         
         switch (codePoint.Value)
         {
             case var _ when CharacterRangeReference.AsciiAlpha.Contains(codePoint):
                 CreateNewTagToken();
                 _tagTokenBuilder.SetEndTag();
-                _parserState = TokenParserState.TagName;
-                return null;
-            case CharacterReference.GreaterThanSign:
-                _streamConsumer.ConsumeCodePoint();
-                _parserState = TokenParserState.Data;
-                return null;
+                ReconsumeIn(TagName);
+                return;
+            case GreaterThanSign:
+                SwitchTo(Data);
+                return;
+            case var _ when !success:
+                Emit(new CharacterToken { Data = LessThanSign.ToString() }, new CharacterToken { Data = Solidus.ToString() }, new EndOfFileToken());
+                return;
             default:
                 CreateNewCommentToken();
-                _parserState = TokenParserState.BogusComment;
-                return null;
+                ReconsumeIn(BogusComment);
+                return;
         }
     }
     
-    private HtmlToken? GetTokenFrom08TagNameState()
+    private void GetTokenFrom08TagNameState()
     {
-        var (success, codePoint) = _streamConsumer.TryGetCurrentCodePoint();
-
-        if (!success)
-        {
-            _parserState = TokenParserState.Data; // so the next token is EOF
-            return null;
-        }
+        var (success, codePoint) = ConsumeNextInputCharacter();
         
         switch (codePoint.Value)
         {
-            case CharacterReference.CharacterTabulation:
-            case CharacterReference.LineFeed:
-            case CharacterReference.FormFeed:
-            case CharacterReference.Space:
-                _streamConsumer.ConsumeCodePoint();
-                _parserState = TokenParserState.BeforeAttributeName;
-                return null;
-            case CharacterReference.Solidus:
-                _streamConsumer.ConsumeCodePoint();
-                _parserState = TokenParserState.SelfClosingStartTag;
-                return null;
-            case CharacterReference.GreaterThanSign:
-                _streamConsumer.ConsumeCodePoint();
-                _parserState = TokenParserState.Data;
-                return GetTagToken();
+            case CharacterTabulation:
+            case LineFeed:
+            case FormFeed:
+            case Space:
+                SwitchTo(BeforeAttributeName);
+                return;
+            case Solidus:
+                SwitchTo(SelfClosingStartTag);
+                return;
+            case GreaterThanSign:
+                SwitchTo(Data);
+                Emit(GetTagToken());
+                return;
             case var _ when CharacterRangeReference.AsciiUpperAlpha.Contains(codePoint):
-                _streamConsumer.ConsumeCodePoint();
                 _tagTokenBuilder.AppendToTagName(codePoint.ToAsciiLower());
-                return null;
-            case CharacterReference.Null:
-                _streamConsumer.ConsumeCodePoint();
-                _tagTokenBuilder.AppendToTagName(CharacterReference.ReplacementCharacter.ToString());
-                return null;
+                return;
+            case Null:
+                _tagTokenBuilder.AppendToTagName(ReplacementCharacter.ToString());
+                return;
+            case var _ when !success:
+                Emit(new EndOfFileToken());
+                return;
             default:
-                _streamConsumer.ConsumeCodePoint();
                 _tagTokenBuilder.AppendToTagName(codePoint);
-                return null;
+                return;
         }
     }
     
-    private HtmlToken? GetTokenFrom32BeforeAttributeNameState()
+    private void GetTokenFrom32BeforeAttributeNameState()
     {
-        var (success, codePoint) = _streamConsumer.TryGetCurrentCodePoint();
+        var (success, codePoint) = ConsumeNextInputCharacter();
 
-        if (!success)
-        {
-            _parserState = TokenParserState.AfterAttributeName;
-            return null;
-        }
-        
         switch (codePoint.Value)
         {
-            case CharacterReference.CharacterTabulation:
-            case CharacterReference.LineFeed:
-            case CharacterReference.FormFeed:
-            case CharacterReference.Space:
-                _streamConsumer.ConsumeCodePoint();
-                return null;
-            case CharacterReference.Solidus:
-            case CharacterReference.GreaterThanSign:
-                _parserState = TokenParserState.AfterAttributeName;
-                return null;
-            case CharacterReference.EqualsSign:
-                _streamConsumer.ConsumeCodePoint();
+            case CharacterTabulation:
+            case LineFeed:
+            case FormFeed:
+            case Space:
+                return; // ignore
+            case Solidus:
+            case GreaterThanSign:
+            case var _ when !success:
+                ReconsumeIn(AfterAttributeName);
+                return;
+            case EqualsSign:
                 _tagTokenBuilder.StartNewAttribute();
                 _tagTokenBuilder.AppendToAttributeName(codePoint);
-                _parserState = TokenParserState.AttributeName;
-                return null;
+                SwitchTo(AttributeName);
+                return;
             default:
                 _tagTokenBuilder.StartNewAttribute();
-                _parserState = TokenParserState.AttributeName;
-                return null;
+                ReconsumeIn(AttributeName);
+                return;
         }
     }
     
-    private HtmlToken? GetTokenFrom33AttributeNameState()
+    private void GetTokenFrom33AttributeNameState()
     {
-        var (success, codePoint) = _streamConsumer.TryGetCurrentCodePoint();
-
-        if (!success)
-        {
-            _parserState = TokenParserState.AfterAttributeName;
-            return null;
-        }
+        var (success, codePoint) = ConsumeNextInputCharacter();
         
         switch (codePoint.Value)
         {
-            case CharacterReference.CharacterTabulation:
-            case CharacterReference.LineFeed:
-            case CharacterReference.FormFeed:
-            case CharacterReference.Space:
-            case CharacterReference.Solidus:
-            case CharacterReference.GreaterThanSign:
-                _parserState = TokenParserState.AfterAttributeName;
-                return null;
-            case CharacterReference.EqualsSign:
-                _streamConsumer.ConsumeCodePoint();
-                _parserState = TokenParserState.BeforeAttributeValueState;
-                return null;
+            case CharacterTabulation:
+            case LineFeed:
+            case FormFeed:
+            case Space:
+            case Solidus:
+            case GreaterThanSign:
+            case var _ when !success:
+                ReconsumeIn(AfterAttributeName);
+                return;
+            case EqualsSign:
+                SwitchTo(BeforeAttributeValueState);
+                return;
             case var _ when CharacterRangeReference.AsciiUpperAlpha.Contains(codePoint):
-                _streamConsumer.ConsumeCodePoint();
                 _tagTokenBuilder.AppendToAttributeName(codePoint.ToAsciiLower());
-                return null;
-            case CharacterReference.Null:
-                _streamConsumer.ConsumeCodePoint();
-                _tagTokenBuilder.AppendToAttributeName(CharacterReference.ReplacementCharacter.ToString());
-                return null;
+                return;
+            case Null:
+                _tagTokenBuilder.AppendToAttributeName(ReplacementCharacter.ToString());
+                return;
             default:
-                _streamConsumer.ConsumeCodePoint();
                 _tagTokenBuilder.AppendToAttributeName(codePoint);
-                return null;
+                return;
         }
     }
     
-    private HtmlToken? GetTokenFrom34AfterAttributeNameState()
+    private void GetTokenFrom34AfterAttributeNameState()
     {
-        var (success, codePoint) = _streamConsumer.TryGetCurrentCodePoint();
-
-        if (!success)
-        {
-            _parserState = TokenParserState.Data; // So that the next token is EOF
-            return null;
-        }
+        var (success, codePoint) = ConsumeNextInputCharacter();
         
         switch (codePoint.Value)
         {
-            case CharacterReference.CharacterTabulation:
-            case CharacterReference.LineFeed:
-            case CharacterReference.FormFeed:
-            case CharacterReference.Space:
-                _streamConsumer.ConsumeCodePoint();
-                return null;
-            case CharacterReference.Solidus:
-                _streamConsumer.ConsumeCodePoint();
-                _parserState = TokenParserState.SelfClosingStartTag;
-                return null;
-            case CharacterReference.EqualsSign:
-                _streamConsumer.ConsumeCodePoint();
-                _parserState = TokenParserState.BeforeAttributeValueState;
-                return null;
-            case CharacterReference.GreaterThanSign:
-                _streamConsumer.ConsumeCodePoint();
-                _parserState = TokenParserState.Data;
-                return GetTagToken();
+            case CharacterTabulation:
+            case LineFeed:
+            case FormFeed:
+            case Space:
+                return; // ignore
+            case Solidus:
+                SwitchTo(SelfClosingStartTag);
+                return;
+            case EqualsSign:
+                SwitchTo(BeforeAttributeValueState);
+                return;
+            case GreaterThanSign:
+                SwitchTo(Data);
+                Emit(GetTagToken());
+                return;
+            case var _ when !success:
+                Emit(new EndOfFileToken());
+                return;
             default:
                 _tagTokenBuilder.StartNewAttribute();
-                _parserState = TokenParserState.AttributeName;
-                return null;
+                ReconsumeIn(AttributeName);
+                return;
         }
     }
     
-    private HtmlToken? GetTokenFrom35BeforeAttributeValueState()
+    private void GetTokenFrom35BeforeAttributeValueState()
     {
-        var (success, codePoint) = _streamConsumer.TryGetCurrentCodePoint();
-
-        if (!success)
-        {
-            _parserState = TokenParserState.AttributeValueUnquoted;
-            return null;
-        }
+        var (_, codePoint) = ConsumeNextInputCharacter();
         
         switch (codePoint.Value)
         {
-            case CharacterReference.CharacterTabulation:
-            case CharacterReference.LineFeed:
-            case CharacterReference.FormFeed:
-            case CharacterReference.Space:
-                _streamConsumer.ConsumeCodePoint();
-                return null;
-            case CharacterReference.QuotationMark:
-                _streamConsumer.ConsumeCodePoint();
-                _parserState = TokenParserState.AttributeValueDoubleQuoted;
-                return null;
-            case CharacterReference.Apostrophe:
-                _streamConsumer.ConsumeCodePoint();
-                _parserState = TokenParserState.AttributeValueSingleQuoted;
-                return null;
-            case CharacterReference.GreaterThanSign:
-                _streamConsumer.ConsumeCodePoint();
-                _parserState = TokenParserState.Data;
-                return GetTagToken();
+            case CharacterTabulation:
+            case LineFeed:
+            case FormFeed:
+            case Space:
+                return; // ignore
+            case QuotationMark:
+                SwitchTo(AttributeValueDoubleQuoted);
+                return;
+            case Apostrophe:
+                SwitchTo(AttributeValueSingleQuoted);
+                return;
+            case GreaterThanSign:
+                SwitchTo(Data);
+                Emit(GetTagToken());
+                return;
             default:
-                _parserState = TokenParserState.AttributeValueUnquoted;
-                return null;
+                ReconsumeIn(AttributeValueUnquoted);
+                return;
         }
     }
     
-    private HtmlToken? GetTokenFrom36AttributeValueDoubleQuotedState()
+    private void GetTokenFrom36AttributeValueDoubleQuotedState()
     {
-        var (success, codePoint) = _streamConsumer.TryGetCurrentCodePoint();
-
-        if (!success)
-        {
-            _parserState = TokenParserState.Data; // So that next token is EOF
-            return null;
-        }
+        var (success, codePoint) = ConsumeNextInputCharacter();
         
         switch (codePoint.Value)
         {
-            case CharacterReference.QuotationMark:
-                _streamConsumer.ConsumeCodePoint();
-                _parserState = TokenParserState.AfterAttributeValueQuoted;
-                return null;
-            case CharacterReference.Ampersand:
-                _streamConsumer.ConsumeCodePoint();
-                _returnState = TokenParserState.AttributeValueDoubleQuoted;
-                _parserState = TokenParserState.CharacterReference;
-                return null;
-            case CharacterReference.Null:
-                _streamConsumer.ConsumeCodePoint();
-                _tagTokenBuilder.AppendToAttributeValue(CharacterReference.ReplacementCharacter.ToString());
-                return null;
+            case QuotationMark:
+                SwitchTo(AfterAttributeValueQuoted);
+                return;
+            case Ampersand:
+                SetReturnStateTo(AttributeValueDoubleQuoted);
+                SwitchTo(TokenParserState.CharacterReference);
+                return;
+            case Null:
+                _tagTokenBuilder.AppendToAttributeValue(ReplacementCharacter.ToString());
+                return;
+            case var _ when !success:
+                Emit(new EndOfFileToken());
+                return;
             default:
-                _streamConsumer.ConsumeCodePoint();
                 _tagTokenBuilder.AppendToAttributeValue(codePoint);
-                return null;
+                return;
         }
     }
     
-    private HtmlToken? GetTokenFrom37AttributeValueSingleQuotedState()
+    private void GetTokenFrom37AttributeValueSingleQuotedState()
     {
-        var (success, codePoint) = _streamConsumer.TryGetCurrentCodePoint();
-
-        if (!success)
-        {
-            _parserState = TokenParserState.Data; // So that next token is EOF
-            return null;
-        }
+        var (success, codePoint) = ConsumeNextInputCharacter();
         
         switch (codePoint.Value)
         {
-            case CharacterReference.Apostrophe:
-                _streamConsumer.ConsumeCodePoint();
-                _parserState = TokenParserState.AfterAttributeValueQuoted;
-                return null;
-            case CharacterReference.Ampersand:
-                _streamConsumer.ConsumeCodePoint();
-                _returnState = TokenParserState.AttributeValueSingleQuoted;
-                _parserState = TokenParserState.CharacterReference;
-                return null;
-            case CharacterReference.Null:
-                _streamConsumer.ConsumeCodePoint();
-                _tagTokenBuilder.AppendToAttributeValue(CharacterReference.ReplacementCharacter.ToString());
-                return null;
+            case Apostrophe:
+                SwitchTo(AfterAttributeValueQuoted);
+                return;
+            case Ampersand:
+                SetReturnStateTo(AttributeValueSingleQuoted);
+                SwitchTo(TokenParserState.CharacterReference);
+                return;
+            case Null:
+                _tagTokenBuilder.AppendToAttributeValue(ReplacementCharacter.ToString());
+                return;
+            case var _ when !success:
+                Emit(new EndOfFileToken());
+                return;
             default:
-                _streamConsumer.ConsumeCodePoint();
                 _tagTokenBuilder.AppendToAttributeValue(codePoint);
-                return null;
+                return;
         }
     }
     
-    private HtmlToken? GetTokenFrom38AttributeValueUnquotedState()
+    private void GetTokenFrom38AttributeValueUnquotedState()
     {
-        var (success, codePoint) = _streamConsumer.TryGetCurrentCodePoint();
-
-        if (!success)
-        {
-            _parserState = TokenParserState.Data; // So that next token is EOF
-            return null;
-        }
+        var (success, codePoint) = ConsumeNextInputCharacter();
         
         switch (codePoint.Value)
         {
-            case CharacterReference.CharacterTabulation:
-            case CharacterReference.LineFeed:
-            case CharacterReference.FormFeed:
-            case CharacterReference.Space:
-                _streamConsumer.ConsumeCodePoint();
-                _parserState = TokenParserState.BeforeAttributeName;
-                return null;
-            case CharacterReference.Ampersand:
-                _streamConsumer.ConsumeCodePoint();
-                _returnState = TokenParserState.AttributeValueUnquoted;
-                _parserState = TokenParserState.CharacterReference;
-                return null;
-            case CharacterReference.GreaterThanSign:
-                _streamConsumer.ConsumeCodePoint();
-                _parserState = TokenParserState.Data;
-                return GetTagToken();
-            case CharacterReference.Null:
-                _streamConsumer.ConsumeCodePoint();
-                _tagTokenBuilder.AppendToAttributeValue(CharacterReference.ReplacementCharacter.ToString());
-                return null;
+            case CharacterTabulation:
+            case LineFeed:
+            case FormFeed:
+            case Space:
+                SwitchTo(BeforeAttributeName);
+                return;
+            case Ampersand:
+                SetReturnStateTo(AttributeValueUnquoted);
+                SwitchTo(TokenParserState.CharacterReference);
+                return;
+            case GreaterThanSign:
+                SwitchTo(Data);
+                Emit(GetTagToken());
+                return;
+            case Null:
+                _tagTokenBuilder.AppendToAttributeValue(ReplacementCharacter.ToString());
+                return;
+            case var _ when !success:
+                Emit(new EndOfFileToken());
+                return;
             default:
-                _streamConsumer.ConsumeCodePoint();
                 _tagTokenBuilder.AppendToAttributeValue(codePoint);
-                return null;
+                return;
         }
     }
     
-    private HtmlToken? GetTokenFrom39AfterAttributeValueQuotedState()
+    private void GetTokenFrom39AfterAttributeValueQuotedState()
     {
-        var (success, codePoint) = _streamConsumer.TryGetCurrentCodePoint();
-
-        if (!success)
-        {
-            _parserState = TokenParserState.Data; // So that next token is EOF
-            return null;
-        }
+        var (success, codePoint) = ConsumeNextInputCharacter();
         
         switch (codePoint.Value)
         {
-            case CharacterReference.CharacterTabulation:
-            case CharacterReference.LineFeed:
-            case CharacterReference.FormFeed:
-            case CharacterReference.Space:
-                _streamConsumer.ConsumeCodePoint();
-                _parserState = TokenParserState.BeforeAttributeName;
-                return null;
-            case CharacterReference.Solidus:
-                _streamConsumer.ConsumeCodePoint();
-                _parserState = TokenParserState.SelfClosingStartTag;
-                return null;
-            case CharacterReference.GreaterThanSign:
-                _streamConsumer.ConsumeCodePoint();
-                _parserState = TokenParserState.Data;
-                return GetTagToken();
+            case CharacterTabulation:
+            case LineFeed:
+            case FormFeed:
+            case Space:
+                SwitchTo(BeforeAttributeName);
+                return;
+            case Solidus:
+                SwitchTo(SelfClosingStartTag);
+                return;
+            case GreaterThanSign:
+                SwitchTo(Data);
+                Emit(GetTagToken());
+                return;
+            case var _ when !success:
+                Emit(new EndOfFileToken());
+                return;
             default:
-                _parserState = TokenParserState.BeforeAttributeName;
-                return null;
+                ReconsumeIn(BeforeAttributeName);
+                return;
         }
     }
     
-    private HtmlToken? GetTokenFrom40SelfClosingStartTagState()
+    private void GetTokenFrom40SelfClosingStartTagState()
     {
-        var (success, codePoint) = _streamConsumer.TryGetCurrentCodePoint();
-
-        if (!success)
-        {
-            _parserState = TokenParserState.Data; // So that next token is EOF
-            return null;
-        }
+        var (success, codePoint) = ConsumeNextInputCharacter();
         
         switch (codePoint.Value)
         {
-            case CharacterReference.GreaterThanSign:
-                _streamConsumer.ConsumeCodePoint();
+            case GreaterThanSign:
                 _tagTokenBuilder.SetSelfClosing();
-                _parserState = TokenParserState.Data;
-                return GetTagToken();
+                SwitchTo(Data);
+                Emit(GetTagToken());
+                return;
+            case var _ when !success:
+                Emit(new EndOfFileToken());
+                return;
             default:
-                _parserState = TokenParserState.BeforeAttributeName;
-                return null;
+                ReconsumeIn(BeforeAttributeName);
+                return;
         }
     }
 
-    private HtmlToken? GetTokenFrom41BogusCommentState()
+    private void GetTokenFrom41BogusCommentState()
     {
-        var (success, codePoint) = _streamConsumer.TryGetCurrentCodePoint();
-
-        if (!success)
-        {
-            _parserState = TokenParserState.Data; // so the next token is EOF
-            return GetCommentToken();
-        }
+        var (success, codePoint) = ConsumeNextInputCharacter();
         
         switch (codePoint.Value)
         {
-            case CharacterReference.GreaterThanSign:
-                _streamConsumer.ConsumeCodePoint();
-                _parserState = TokenParserState.Data;
-                return GetCommentToken();
-            case CharacterReference.Null:
-                _streamConsumer.ConsumeCodePoint();
-                _commentDataBuilder.Append(CharacterReference.ReplacementCharacter);
-                return null;
+            case GreaterThanSign:
+                SwitchTo(Data);
+                Emit(GetCommentToken());
+                return;
+            case Null:
+                _commentDataBuilder.Append(ReplacementCharacter);
+                return;
+            case var _ when !success:
+                Emit(GetCommentToken(), new EndOfFileToken());
+                return;
             default:
-                _streamConsumer.ConsumeCodePoint();
                 _commentDataBuilder.Append(codePoint.ToString());
-                return null;
+                return;
         }
     }
     
-    private HtmlToken? GetTokenFrom42MarkupDeclarationOpenState()
+    private void GetTokenFrom42MarkupDeclarationOpenState()
     {
-        var (success, result) = _streamConsumer.LookAhead(StringReference.DoubleHyphen.Length);
+        var (success, result) = LookAhead(StringReference.DoubleHyphen.Length, false);
 
         if (success)
         {
             if (result == StringReference.DoubleHyphen)
             {
-                _streamConsumer.ConsumeCodePoint(StringReference.DoubleHyphen.Length);
+                ConsumeLookAhead(StringReference.DoubleHyphen.Length);
                 CreateNewCommentToken();
-                _parserState = TokenParserState.CommentStart;
-                return null;
+                SwitchTo(CommentStart);
+                return;
             }
 
-            (success, result) = _streamConsumer.LookAhead(StringReference.DocType.Length);
+            (success, result) = LookAhead(StringReference.DocType.Length, false);
 
             if (success)
             {
                 if (StringReference.AsciiCaseInsensitiveEquals(result, StringReference.DocType))
                 {
-                    _streamConsumer.ConsumeCodePoint(StringReference.DocType.Length);
-                    _parserState = TokenParserState.Doctype;
-                    return null;
+                    ConsumeLookAhead(StringReference.DocType.Length);
+                    SwitchTo(Doctype);
+                    return;
                 }
                 
                 if (result == "[CDATA[")
@@ -600,906 +525,750 @@ internal class HtmlTokenGenerator
         }
 
         CreateNewCommentToken();
-        _parserState = TokenParserState.BogusComment;
-        return null;
+        SwitchTo(BogusComment);
     }
 
-    private HtmlToken? GetTokenFrom43CommentStartState()
+    private void GetTokenFrom43CommentStartState()
     {
-        var (success, codePoint) = _streamConsumer.TryGetCurrentCodePoint();
-
-        if (!success)
-        {
-            _parserState = TokenParserState.Comment;
-            return null;
-        }
+        var (_, codePoint) = ConsumeNextInputCharacter();
         
         switch (codePoint.Value)
         {
-            case CharacterReference.HyphenMinus:
-                _streamConsumer.ConsumeCodePoint();
-                _parserState = TokenParserState.CommentStartDash;
-                return null;
-            case CharacterReference.GreaterThanSign:
-                _streamConsumer.ConsumeCodePoint();
-                _parserState = TokenParserState.Data;
-                return GetCommentToken();
+            case HyphenMinus:
+                SwitchTo(CommentStartDash);
+                return;
+            case GreaterThanSign:
+                SwitchTo(Data);
+                Emit(GetCommentToken());
+                return;
             default:
-                _parserState = TokenParserState.Comment;
-                return null;
+                ReconsumeIn(Comment);
+                return;
         }
     }
     
-    private HtmlToken? GetTokenFrom44CommentStartDashState()
+    private void GetTokenFrom44CommentStartDashState()
     {
-        var (success, codePoint) = _streamConsumer.TryGetCurrentCodePoint();
-
-        if (!success)
-        {
-            _parserState = TokenParserState.Data; // so the next token is EOF
-            return GetCommentToken();
-        }
+        var (success, codePoint) = ConsumeNextInputCharacter();
         
         switch (codePoint.Value)
         {
-            case CharacterReference.HyphenMinus:
-                _streamConsumer.ConsumeCodePoint();
-                _parserState = TokenParserState.CommentEnd;
-                return null;
-            case CharacterReference.GreaterThanSign:
-                _streamConsumer.ConsumeCodePoint();
-                _parserState = TokenParserState.Data;
-                return GetCommentToken();
+            case HyphenMinus:
+                SwitchTo(CommentEnd);
+                return;
+            case GreaterThanSign:
+                SwitchTo(Data);
+                Emit(GetCommentToken());
+                return;
+            case var _ when !success:
+                Emit(GetCommentToken(), new EndOfFileToken());
+                return;
             default:
-                _commentDataBuilder.Append(CharacterReference.HyphenMinus);
-                _parserState = TokenParserState.Comment;
-                return null;
+                _commentDataBuilder.Append(HyphenMinus);
+                ReconsumeIn(Comment);
+                return;
         }
     }
     
-    private HtmlToken? GetTokenFrom45CommentState()
+    private void GetTokenFrom45CommentState()
     {
-        var (success, codePoint) = _streamConsumer.TryGetCurrentCodePoint();
-
-        if (!success)
-        {
-            _parserState = TokenParserState.Data; // so the next token is EOF
-            return GetCommentToken();
-        }
+        var (success, codePoint) = ConsumeNextInputCharacter();
         
         switch (codePoint.Value)
         {
-            case CharacterReference.LessThanSign:
-                _streamConsumer.ConsumeCodePoint();
+            case LessThanSign:
                 _commentDataBuilder.Append(codePoint.ToString());
-                _parserState = TokenParserState.CommentLessThanSign;
-                return null;
-            case CharacterReference.HyphenMinus:
-                _streamConsumer.ConsumeCodePoint();
-                _parserState = TokenParserState.CommentEndDash;
-                return null;
-            case CharacterReference.Null:
-                _streamConsumer.ConsumeCodePoint();
-                _commentDataBuilder.Append(CharacterReference.ReplacementCharacter);
-                return null;
+                SwitchTo(CommentLessThanSign);
+                return;
+            case HyphenMinus:
+                SwitchTo(CommentEndDash);
+                return;
+            case Null:
+                _commentDataBuilder.Append(ReplacementCharacter);
+                return;
+            case var _ when !success:
+                Emit(GetCommentToken(), new EndOfFileToken());
+                return;
             default:
-                _streamConsumer.ConsumeCodePoint();
                 _commentDataBuilder.Append(codePoint.ToString());
-                return null;
+                return;
         }
     }
     
-    private HtmlToken? GetTokenFrom46CommentLessThanSignState()
+    private void GetTokenFrom46CommentLessThanSignState()
     {
-        var (success, codePoint) = _streamConsumer.TryGetCurrentCodePoint();
-
-        if (!success)
-        {
-            _parserState = TokenParserState.Comment;
-            return null;
-        }
+        var (_, codePoint) = ConsumeNextInputCharacter(); 
         
         switch (codePoint.Value)
         {
-            case CharacterReference.ExclamationMark:
-                _streamConsumer.ConsumeCodePoint();
+            case ExclamationMark:
                 _commentDataBuilder.Append(codePoint.ToString());
-                _parserState = TokenParserState.CommentLessThanSignBang;
-                return null;
-            case CharacterReference.LessThanSign:
-                _streamConsumer.ConsumeCodePoint();
+                SwitchTo(CommentLessThanSignBang);
+                return;
+            case LessThanSign:
                 _commentDataBuilder.Append(codePoint.ToString());
-                return null;
+                return;
             default:
-                _parserState = TokenParserState.Comment;
-                return null;
+                ReconsumeIn(Comment);
+                return;
         }
     }
     
-    private HtmlToken? GetTokenFrom47CommentLessThanSignBangState()
+    private void GetTokenFrom47CommentLessThanSignBangState()
     {
-        var (success, codePoint) = _streamConsumer.TryGetCurrentCodePoint();
-
-        if (!success)
-        {
-            _parserState = TokenParserState.Comment;
-            return null;
-        }
+        var (_, codePoint) = ConsumeNextInputCharacter();
         
         switch (codePoint.Value)
         {
-            case CharacterReference.HyphenMinus:
-                _streamConsumer.ConsumeCodePoint();
-                _parserState = TokenParserState.CommentLessThanSignBangDash;
-                return null;
+            case HyphenMinus:
+                SwitchTo(CommentLessThanSignBangDash);
+                return;
             default:
-                _parserState = TokenParserState.Comment;
-                return null;
+                ReconsumeIn(Comment);
+                return;
         }
     }
     
-    private HtmlToken? GetTokenFrom48CommentLessThanSignBangDashState()
+    private void GetTokenFrom48CommentLessThanSignBangDashState()
     {
-        var (success, codePoint) = _streamConsumer.TryGetCurrentCodePoint();
-
-        if (!success)
-        {
-            _parserState = TokenParserState.CommentEndDash;
-            return null;
-        }
+        var (_, codePoint) = ConsumeNextInputCharacter();
         
         switch (codePoint.Value)
         {
-            case CharacterReference.HyphenMinus:
-                _streamConsumer.ConsumeCodePoint();
-                _parserState = TokenParserState.CommentLessThanSignBangDashDash;
-                return null;
+            case HyphenMinus:
+                SwitchTo(CommentLessThanSignBangDashDash);
+                return;
             default:
-                _parserState = TokenParserState.CommentEndDash;
-                return null;
+                ReconsumeIn(CommentEndDash);
+                return;
         }
     }
     
-    private HtmlToken? GetTokenFrom49CommentLessThanSignBangDashDashState()
+    private void GetTokenFrom49CommentLessThanSignBangDashDashState()
     {
-        _parserState = TokenParserState.CommentEnd;
-        return null;
+        ConsumeNextInputCharacter();
+        ReconsumeIn(CommentEnd);
     }
     
-    private HtmlToken? GetTokenFrom50CommentEndDashState()
+    private void GetTokenFrom50CommentEndDashState()
     {
-        var (success, codePoint) = _streamConsumer.TryGetCurrentCodePoint();
-
-        if (!success)
-        {
-            _parserState = TokenParserState.Data; // so the next token is EOF
-            return GetCommentToken();
-        }
+        var (success, codePoint) = ConsumeNextInputCharacter();
         
         switch (codePoint.Value)
         {
-            case CharacterReference.HyphenMinus:
-                _streamConsumer.ConsumeCodePoint();
-                _parserState = TokenParserState.CommentEnd;
-                return null;
+            case HyphenMinus:
+                SwitchTo(CommentEnd);
+                return;
+            case var _ when !success:
+                Emit(GetCommentToken(), new EndOfFileToken());
+                return;
             default:
-                _commentDataBuilder.Append(CharacterReference.HyphenMinus);
-                _parserState = TokenParserState.Comment;
-                return null;
+                _commentDataBuilder.Append(HyphenMinus);
+                ReconsumeIn(Comment);
+                return;
         }
     }
     
-    private HtmlToken? GetTokenFrom51CommentEndState()
+    private void GetTokenFrom51CommentEndState()
     {
-        var (success, codePoint) = _streamConsumer.TryGetCurrentCodePoint();
+        var (success, codePoint) = ConsumeNextInputCharacter();
 
-        if (!success)
-        {
-            _parserState = TokenParserState.Data; // so the next token is EOF
-            return GetCommentToken();
-        }
-        
         switch (codePoint.Value)
         {
-            case CharacterReference.GreaterThanSign:
-                _streamConsumer.ConsumeCodePoint();
-                _parserState = TokenParserState.Data;
-                return GetCommentToken();
-            case CharacterReference.ExclamationMark:
-                _streamConsumer.ConsumeCodePoint();
-                _parserState = TokenParserState.CommentEndBang;
-                return null;
-            case CharacterReference.HyphenMinus:
-                _streamConsumer.ConsumeCodePoint();
-                _commentDataBuilder.Append(CharacterReference.HyphenMinus);
-                return null;
+            case GreaterThanSign:
+                SwitchTo(Data);
+                Emit(GetCommentToken());
+                return;
+            case ExclamationMark:
+                SwitchTo(CommentEndBang);
+                return;
+            case HyphenMinus:
+                _commentDataBuilder.Append(HyphenMinus);
+                return;
+            case var _ when !success:
+                Emit(GetCommentToken(), new EndOfFileToken());
+                return;
             default:
-                _commentDataBuilder.Append(CharacterReference.HyphenMinus);
-                _commentDataBuilder.Append(CharacterReference.HyphenMinus);
-                _parserState = TokenParserState.Comment;
-                return null;
+                _commentDataBuilder.Append(HyphenMinus);
+                _commentDataBuilder.Append(HyphenMinus);
+                ReconsumeIn(Comment);
+                return;
         }
     }
     
-    private HtmlToken? GetTokenFrom52CommentEndBangState()
+    private void GetTokenFrom52CommentEndBangState()
     {
-        var (success, codePoint) = _streamConsumer.TryGetCurrentCodePoint();
-
-        if (!success)
-        {
-            _parserState = TokenParserState.Data; // so the next token is EOF
-            return GetCommentToken();
-        }
+        var (success, codePoint) = ConsumeNextInputCharacter();
         
         switch (codePoint.Value)
         {
-            case CharacterReference.HyphenMinus:
-                _streamConsumer.ConsumeCodePoint();
-                _commentDataBuilder.Append(CharacterReference.HyphenMinus);
-                _commentDataBuilder.Append(CharacterReference.HyphenMinus);
-                _commentDataBuilder.Append(CharacterReference.ExclamationMark);
-                _parserState = TokenParserState.CommentEndDash;
-                return null;
-            case CharacterReference.GreaterThanSign:
-                _streamConsumer.ConsumeCodePoint();
-                _parserState = TokenParserState.Data;
-                return GetCommentToken();
+            case HyphenMinus:
+                _commentDataBuilder.Append(HyphenMinus);
+                _commentDataBuilder.Append(HyphenMinus);
+                _commentDataBuilder.Append(ExclamationMark);
+                SwitchTo(CommentEndDash);
+                return;
+            case GreaterThanSign:
+                SwitchTo(Data);
+                Emit(GetCommentToken());
+                return;
+            case var _ when !success:
+                Emit(GetCommentToken(), new EndOfFileToken());
+                return;
             default:
-                _commentDataBuilder.Append(CharacterReference.HyphenMinus);
-                _commentDataBuilder.Append(CharacterReference.HyphenMinus);
-                _commentDataBuilder.Append(CharacterReference.ExclamationMark);
-                _parserState = TokenParserState.Comment;
-                return null;
+                _commentDataBuilder.Append(HyphenMinus);
+                _commentDataBuilder.Append(HyphenMinus);
+                _commentDataBuilder.Append(ExclamationMark);
+                ReconsumeIn(Comment);
+                return;
         }
     }
     
-    private HtmlToken? GetTokenFrom53DoctypeState()
+    private void GetTokenFrom53DoctypeState()
     {
-        var (success, codePoint) = _streamConsumer.TryGetCurrentCodePoint();
-
-        if (!success)
-        {
-            CreateNewDoctypeToken();
-            _docTypeTokenBuilder.SetForceQuirks();
-            _parserState = TokenParserState.Data; // so the next token is EOF
-            return GetDoctypeToken();
-        }
+        var (success, codePoint) = ConsumeNextInputCharacter();
         
         switch (codePoint.Value)
         {
-            case CharacterReference.CharacterTabulation:
-            case CharacterReference.LineFeed:
-            case CharacterReference.FormFeed:
-            case CharacterReference.Space:
-                _streamConsumer.ConsumeCodePoint();
-                _parserState = TokenParserState.BeforeDoctypeName;
-                return null;
-            case CharacterReference.GreaterThanSign:
-                _parserState = TokenParserState.BeforeDoctypeName;
-                return null;
-            default:
-                _parserState = TokenParserState.BeforeDoctypeName;
-                return null;
-        }
-    }
-    
-    private HtmlToken? GetTokenFrom54BeforeDoctypeNameState()
-    {
-        var (success, codePoint) = _streamConsumer.TryGetCurrentCodePoint();
-
-        if (!success)
-        {
-            CreateNewDoctypeToken();
-            _docTypeTokenBuilder.SetForceQuirks();
-            _parserState = TokenParserState.Data; // so the next token is EOF
-            return GetDoctypeToken();
-        }
-        
-        switch (codePoint.Value)
-        {
-            case CharacterReference.CharacterTabulation:
-            case CharacterReference.LineFeed:
-            case CharacterReference.FormFeed:
-            case CharacterReference.Space:
-                _streamConsumer.ConsumeCodePoint();
-                return null;
-            case var _ when CharacterRangeReference.AsciiUpperAlpha.Contains(codePoint):
-                _streamConsumer.ConsumeCodePoint();
-                CreateNewDoctypeToken();
-                _docTypeTokenBuilder.AppendToName(codePoint.ToAsciiLower());
-                _parserState = TokenParserState.DoctypeName;
-                return null;
-            case CharacterReference.Null:
-                _streamConsumer.ConsumeCodePoint();
-                CreateNewDoctypeToken();
-                _docTypeTokenBuilder.AppendToName(UnicodeCodePoint.ReplacementCharacter);
-                _parserState = TokenParserState.DoctypeName;
-                return null;
-            case CharacterReference.GreaterThanSign:
-                _streamConsumer.ConsumeCodePoint();
+            case CharacterTabulation:
+            case LineFeed:
+            case FormFeed:
+            case Space:
+                SwitchTo(BeforeDoctypeName);
+                return;
+            case GreaterThanSign:
+                ReconsumeIn(BeforeDoctypeName);
+                return;
+            case var _ when !success:
                 CreateNewDoctypeToken();
                 _docTypeTokenBuilder.SetForceQuirks();
-                _parserState = TokenParserState.Data;
-                return GetDoctypeToken();
+                Emit(GetDoctypeToken(), new EndOfFileToken());
+                return;
             default:
-                _streamConsumer.ConsumeCodePoint();
+                ReconsumeIn(BeforeDoctypeName);
+                return;
+        }
+    }
+    
+    private void GetTokenFrom54BeforeDoctypeNameState()
+    {
+        var (success, codePoint) = ConsumeNextInputCharacter();
+        
+        switch (codePoint.Value)
+        {
+            case CharacterTabulation:
+            case LineFeed:
+            case FormFeed:
+            case Space:
+                return; // ignore
+            case var _ when CharacterRangeReference.AsciiUpperAlpha.Contains(codePoint):
+                CreateNewDoctypeToken();
+                _docTypeTokenBuilder.AppendToName(codePoint.ToAsciiLower());
+                SwitchTo(DoctypeName);
+                return;
+            case Null:
+                CreateNewDoctypeToken();
+                _docTypeTokenBuilder.AppendToName(UnicodeCodePoint.ReplacementCharacter);
+                SwitchTo(DoctypeName);
+                return;
+            case GreaterThanSign:
+                CreateNewDoctypeToken();
+                _docTypeTokenBuilder.SetForceQuirks();
+                SwitchTo(Data);
+                Emit(GetDoctypeToken());
+                return;
+            case var _ when !success:
+                CreateNewDoctypeToken();
+                _docTypeTokenBuilder.SetForceQuirks();
+                Emit(GetDoctypeToken(), new EndOfFileToken());
+                return;
+            default:
                 CreateNewDoctypeToken();
                 _docTypeTokenBuilder.AppendToName(codePoint);
-                _parserState = TokenParserState.DoctypeName;
-                return null;
+                SwitchTo(DoctypeName);
+                return;
         }
     }
     
-    private HtmlToken? GetTokenFrom55DoctypeNameState()
+    private void GetTokenFrom55DoctypeNameState()
     {
-        var (success, codePoint) = _streamConsumer.TryGetCurrentCodePoint();
-
-        if (!success)
-        {
-            _docTypeTokenBuilder.SetForceQuirks();
-            _parserState = TokenParserState.Data; // so the next token is EOF
-            return GetDoctypeToken();
-        }
+        var (success, codePoint) = ConsumeNextInputCharacter();
         
         switch (codePoint.Value)
         {
-            case CharacterReference.CharacterTabulation:
-            case CharacterReference.LineFeed:
-            case CharacterReference.FormFeed:
-            case CharacterReference.Space:
-                _streamConsumer.ConsumeCodePoint();
-                _parserState = TokenParserState.AfterDoctypeName;
-                return null;
-            case CharacterReference.GreaterThanSign:
-                _streamConsumer.ConsumeCodePoint();
-                _parserState = TokenParserState.Data;
-                return GetDoctypeToken();
+            case CharacterTabulation:
+            case LineFeed:
+            case FormFeed:
+            case Space:
+                SwitchTo(AfterDoctypeName);
+                return;
+            case GreaterThanSign:
+                SwitchTo(Data);
+                Emit(GetDoctypeToken());
+                return;
             case var _ when CharacterRangeReference.AsciiUpperAlpha.Contains(codePoint):
-                _streamConsumer.ConsumeCodePoint();
                 _docTypeTokenBuilder.AppendToName(codePoint.ToAsciiLower());
-                return null;
-            case CharacterReference.Null:
-                _streamConsumer.ConsumeCodePoint();
+                return;
+            case Null:
                 _docTypeTokenBuilder.AppendToName(UnicodeCodePoint.ReplacementCharacter);
-                return null;
+                return;
+            case var _ when !success:
+                _docTypeTokenBuilder.SetForceQuirks();
+                Emit(GetDoctypeToken(), new EndOfFileToken());
+                return;
             default:
-                _streamConsumer.ConsumeCodePoint();
                 _docTypeTokenBuilder.AppendToName(codePoint);
-                return null;
+                return;
         }
     }
     
-    private HtmlToken? GetTokenFrom56AfterDoctypeNameState()
+    private void GetTokenFrom56AfterDoctypeNameState()
     {
-        var (success, codePoint) = _streamConsumer.TryGetCurrentCodePoint();
-
-        if (!success)
-        {
-            _docTypeTokenBuilder.SetForceQuirks();
-            _parserState = TokenParserState.Data; // so the next token is EOF
-            return GetDoctypeToken();
-        }
+        var (success, codePoint) = ConsumeNextInputCharacter();
         
         switch (codePoint.Value)
         {
-            case CharacterReference.CharacterTabulation:
-            case CharacterReference.LineFeed:
-            case CharacterReference.FormFeed:
-            case CharacterReference.Space:
-                _streamConsumer.ConsumeCodePoint();
-                return null;
-            case CharacterReference.GreaterThanSign:
-                _streamConsumer.ConsumeCodePoint();
-                _parserState = TokenParserState.Data;
-                return GetDoctypeToken();
+            case CharacterTabulation:
+            case LineFeed:
+            case FormFeed:
+            case Space:
+                return; // ignore
+            case GreaterThanSign:
+                SwitchTo(Data);
+                Emit(GetDoctypeToken());
+                return;
+            case var _ when !success:
+                _docTypeTokenBuilder.SetForceQuirks();
+                Emit(GetDoctypeToken(), new EndOfFileToken());
+                return;
             default:
-
-                (success, var result) = _streamConsumer.LookAhead(StringReference.Public.Length);
-
-                if (success)
+                var (lookAheadSuccess,  result) = LookAhead(StringReference.Public.Length, true);
+                if (lookAheadSuccess)
                 {
                     if (StringReference.AsciiCaseInsensitiveEquals(result, StringReference.Public))
                     {
-                        _streamConsumer.ConsumeCodePoint(StringReference.Public.Length);
-                        _parserState = TokenParserState.AfterDoctypePublicKeyword;
-                        return null;
+                        ConsumeLookAhead(StringReference.Public.Length - 1); // current already consumed
+                        SwitchTo(AfterDoctypePublicKeyword);
+                        return;
                     }
                     
                     if (StringReference.AsciiCaseInsensitiveEquals(result, StringReference.System))
                     {
-                        _streamConsumer.ConsumeCodePoint(StringReference.System.Length);
-                        _parserState = TokenParserState.AfterDoctypeSystemKeyword;
-                        return null;
+                        ConsumeLookAhead(StringReference.System.Length - 1); // current already consumed
+                        SwitchTo(AfterDoctypeSystemKeyword);
+                        return;
                     }
                 }
 
                 _docTypeTokenBuilder.SetForceQuirks();
-                _parserState = TokenParserState.BogusDoctype;
-                
-                return null;
+                SwitchTo(BogusDoctype);
+                return;
         }
     }
     
-    private HtmlToken? GetTokenFrom57AfterDoctypePublicKeywordState()
+    private void GetTokenFrom57AfterDoctypePublicKeywordState()
     {
-        var (success, codePoint) = _streamConsumer.TryGetCurrentCodePoint();
-
-        if (!success)
-        {
-            _docTypeTokenBuilder.SetForceQuirks();
-            _parserState = TokenParserState.Data; // so the next token is EOF
-            return GetDoctypeToken();
-        }
+        var (success, codePoint) = ConsumeNextInputCharacter();
         
         switch (codePoint.Value)
         {
-            case CharacterReference.CharacterTabulation:
-            case CharacterReference.LineFeed:
-            case CharacterReference.FormFeed:
-            case CharacterReference.Space:
-                _streamConsumer.ConsumeCodePoint();
-                _parserState = TokenParserState.BeforeDoctypePublicIdentifier;
-                return null;
-            case CharacterReference.QuotationMark:
-                _streamConsumer.ConsumeCodePoint();
+            case CharacterTabulation:
+            case LineFeed:
+            case FormFeed:
+            case Space:
+                SwitchTo(BeforeDoctypePublicIdentifier);
+                return;
+            case QuotationMark:
                 _docTypeTokenBuilder.SetPublicIdentifierPresent();
-                _parserState = TokenParserState.DoctypePublicIdentifierDoubleQuoted;
-                return null;
-            case CharacterReference.Apostrophe:
-                _streamConsumer.ConsumeCodePoint();
+                SwitchTo(DoctypePublicIdentifierDoubleQuoted);
+                return;
+            case Apostrophe:
                 _docTypeTokenBuilder.SetPublicIdentifierPresent();
-                _parserState = TokenParserState.DoctypePublicIdentifierSingleQuoted;
-                return null;
-            case CharacterReference.GreaterThanSign:
-                _streamConsumer.ConsumeCodePoint();
+                SwitchTo(DoctypePublicIdentifierSingleQuoted);
+                return;
+            case GreaterThanSign:
                 _docTypeTokenBuilder.SetForceQuirks();
-                _parserState = TokenParserState.Data;
-                return GetDoctypeToken();
+                SwitchTo(Data);
+                Emit(GetDoctypeToken());
+                return;
+            case var _ when !success:
+                _docTypeTokenBuilder.SetForceQuirks();
+                Emit(GetDoctypeToken(), new EndOfFileToken());
+                return;
             default:
                 _docTypeTokenBuilder.SetForceQuirks();
-                _parserState = TokenParserState.BogusDoctype;
-                return null;
+                ReconsumeIn(BogusDoctype);
+                return;
         }
     }
     
-    private HtmlToken? GetTokenFrom58BeforeDoctypePublicIdentifierState()
+    private void GetTokenFrom58BeforeDoctypePublicIdentifierState()
     {
-        var (success, codePoint) = _streamConsumer.TryGetCurrentCodePoint();
-
-        if (!success)
-        {
-            _docTypeTokenBuilder.SetForceQuirks();
-            _parserState = TokenParserState.Data; // so the next token is EOF
-            return GetDoctypeToken();
-        }
+        var (success, codePoint) = ConsumeNextInputCharacter();
         
         switch (codePoint.Value)
         {
-            case CharacterReference.CharacterTabulation:
-            case CharacterReference.LineFeed:
-            case CharacterReference.FormFeed:
-            case CharacterReference.Space:
-                _streamConsumer.ConsumeCodePoint();
-                return null;
-            case CharacterReference.QuotationMark:
-                _streamConsumer.ConsumeCodePoint();
+            case CharacterTabulation:
+            case LineFeed:
+            case FormFeed:
+            case Space:
+                return; // ignore
+            case QuotationMark:
                 _docTypeTokenBuilder.SetPublicIdentifierPresent();
-                _parserState = TokenParserState.DoctypePublicIdentifierDoubleQuoted;
-                return null;
-            case CharacterReference.Apostrophe:
-                _streamConsumer.ConsumeCodePoint();
+                SwitchTo(DoctypePublicIdentifierDoubleQuoted);
+                return;
+            case Apostrophe:
                 _docTypeTokenBuilder.SetPublicIdentifierPresent();
-                _parserState = TokenParserState.DoctypePublicIdentifierSingleQuoted;
-                return null;
-            case CharacterReference.GreaterThanSign:
-                _streamConsumer.ConsumeCodePoint();
+                SwitchTo(DoctypePublicIdentifierSingleQuoted);
+                return;
+            case GreaterThanSign:
                 _docTypeTokenBuilder.SetForceQuirks();
-                _parserState = TokenParserState.Data;
-                return GetDoctypeToken();
+                SwitchTo(Data);
+                Emit(GetDoctypeToken());
+                return;
+            case var _ when !success:
+                _docTypeTokenBuilder.SetForceQuirks();
+                Emit(GetDoctypeToken(), new EndOfFileToken());
+                return;
             default:
                 _docTypeTokenBuilder.SetForceQuirks();
-                _parserState = TokenParserState.BogusDoctype;
-                return null;
+                ReconsumeIn(BogusDoctype);
+                return;
         }
     }
     
-    private HtmlToken? GetTokenFrom59DoctypePublicIdentifierDoubleQuotedState()
+    private void GetTokenFrom59DoctypePublicIdentifierDoubleQuotedState()
     {
-        var (success, codePoint) = _streamConsumer.TryGetCurrentCodePoint();
-
-        if (!success)
-        {
-            _docTypeTokenBuilder.SetForceQuirks();
-            _parserState = TokenParserState.Data; // so the next token is EOF
-            return GetDoctypeToken();
-        }
+        var (success, codePoint) = ConsumeNextInputCharacter();
         
         switch (codePoint.Value)
         {
-            case CharacterReference.QuotationMark:
-                _streamConsumer.ConsumeCodePoint();
-                _parserState = TokenParserState.AfterDoctypePublicIdentifier;
-                return null;
-            case CharacterReference.Null:
-                _streamConsumer.ConsumeCodePoint();
+            case QuotationMark:
+                SwitchTo(AfterDoctypePublicIdentifier);
+                return;
+            case Null:
                 _docTypeTokenBuilder.AppendToPublicIdentifier(UnicodeCodePoint.ReplacementCharacter);
-                return null;
-            case CharacterReference.GreaterThanSign:
-                _streamConsumer.ConsumeCodePoint();
+                return;
+            case GreaterThanSign:
                 _docTypeTokenBuilder.SetForceQuirks();
-                _parserState = TokenParserState.Data;
-                return GetDoctypeToken();
+                SwitchTo(Data);
+                Emit(GetDoctypeToken());
+                return;
+            case var _ when !success:
+                _docTypeTokenBuilder.SetForceQuirks();
+                Emit(GetDoctypeToken(), new EndOfFileToken());
+                return;
             default:
-                _streamConsumer.ConsumeCodePoint();
                 _docTypeTokenBuilder.AppendToPublicIdentifier(codePoint);
-                return null;
+                return;
         }
     }
     
-    private HtmlToken? GetTokenFrom60DoctypePublicIdentifierSingleQuotedState()
+    private void GetTokenFrom60DoctypePublicIdentifierSingleQuotedState()
     {
-        var (success, codePoint) = _streamConsumer.TryGetCurrentCodePoint();
-
-        if (!success)
-        {
-            _docTypeTokenBuilder.SetForceQuirks();
-            _parserState = TokenParserState.Data; // so the next token is EOF
-            return GetDoctypeToken();
-        }
+        var (success, codePoint) = ConsumeNextInputCharacter();
         
         switch (codePoint.Value)
         {
-            case CharacterReference.Apostrophe:
-                _streamConsumer.ConsumeCodePoint();
-                _parserState = TokenParserState.AfterDoctypePublicIdentifier;
-                return null;
-            case CharacterReference.Null:
-                _streamConsumer.ConsumeCodePoint();
+            case Apostrophe:
+                SwitchTo(AfterDoctypePublicIdentifier);
+                return;
+            case Null:
                 _docTypeTokenBuilder.AppendToPublicIdentifier(UnicodeCodePoint.ReplacementCharacter);
-                return null;
-            case CharacterReference.GreaterThanSign:
-                _streamConsumer.ConsumeCodePoint();
+                return;
+            case GreaterThanSign:
                 _docTypeTokenBuilder.SetForceQuirks();
-                _parserState = TokenParserState.Data;
-                return GetDoctypeToken();
+                SwitchTo(Data);
+                Emit(GetDoctypeToken());
+                return;
+            case var _ when !success:
+                _docTypeTokenBuilder.SetForceQuirks();
+                Emit(GetDoctypeToken(), new EndOfFileToken());
+                return;
             default:
-                _streamConsumer.ConsumeCodePoint();
                 _docTypeTokenBuilder.AppendToPublicIdentifier(codePoint);
-                return null;
+                return;
         }
     }
     
-    private HtmlToken? GetTokenFrom61AfterDoctypePublicIdentifierState()
+    private void GetTokenFrom61AfterDoctypePublicIdentifierState()
     {
-        var (success, codePoint) = _streamConsumer.TryGetCurrentCodePoint();
-
-        if (!success)
-        {
-            _docTypeTokenBuilder.SetForceQuirks();
-            _parserState = TokenParserState.Data; // so the next token is EOF
-            return GetDoctypeToken();
-        }
+        var (success, codePoint) = ConsumeNextInputCharacter();
         
         switch (codePoint.Value)
         {
-            case CharacterReference.CharacterTabulation:
-            case CharacterReference.LineFeed:
-            case CharacterReference.FormFeed:
-            case CharacterReference.Space:
-                _streamConsumer.ConsumeCodePoint();
-                _parserState = TokenParserState.BetweenDoctypePublicAndSystemIdentifier;
-                return null;
-            case CharacterReference.GreaterThanSign:
-                _streamConsumer.ConsumeCodePoint();
-                _parserState = TokenParserState.Data;
-                return GetDoctypeToken();
-            case CharacterReference.QuotationMark:
-                _streamConsumer.ConsumeCodePoint();
+            case CharacterTabulation:
+            case LineFeed:
+            case FormFeed:
+            case Space:
+                SwitchTo(BetweenDoctypePublicAndSystemIdentifier);
+                return;
+            case GreaterThanSign:
+                SwitchTo(Data);
+                Emit(GetDoctypeToken());
+                return;
+            case QuotationMark:
                 _docTypeTokenBuilder.SetSystemIdentifierPresent();
-                _parserState = TokenParserState.DoctypeSystemIdentifierDoubleQuoted;
-                return null;
-            case CharacterReference.Apostrophe:
-                _streamConsumer.ConsumeCodePoint();
+                SwitchTo(DoctypeSystemIdentifierDoubleQuoted);
+                return;
+            case Apostrophe:
                 _docTypeTokenBuilder.SetSystemIdentifierPresent();
-                _parserState = TokenParserState.DoctypeSystemIdentifierSingleQuoted;
-                return null;
+                SwitchTo(DoctypeSystemIdentifierSingleQuoted);
+                return;
+            case var _ when !success:
+                _docTypeTokenBuilder.SetForceQuirks();
+                Emit(GetDoctypeToken(), new EndOfFileToken());
+                return;
             default:
                 _docTypeTokenBuilder.SetForceQuirks();
-                _parserState = TokenParserState.BogusDoctype;
-                return null;
+                ReconsumeIn(BogusDoctype);
+                return;
         }
     }
     
-    private HtmlToken? GetTokenFrom62BetweenDoctypePublicAndSystemIdentifiersState()
+    private void GetTokenFrom62BetweenDoctypePublicAndSystemIdentifiersState()
     {
-        var (success, codePoint) = _streamConsumer.TryGetCurrentCodePoint();
-
-        if (!success)
-        {
-            _docTypeTokenBuilder.SetForceQuirks();
-            _parserState = TokenParserState.Data; // so the next token is EOF
-            return GetDoctypeToken();
-        }
+        var (success, codePoint) = ConsumeNextInputCharacter();
         
         switch (codePoint.Value)
         {
-            case CharacterReference.CharacterTabulation:
-            case CharacterReference.LineFeed:
-            case CharacterReference.FormFeed:
-            case CharacterReference.Space:
-                _streamConsumer.ConsumeCodePoint();
-                return null;
-            case CharacterReference.GreaterThanSign:
-                _streamConsumer.ConsumeCodePoint();
-                _parserState = TokenParserState.Data;
-                return GetDoctypeToken();
-            case CharacterReference.QuotationMark:
-                _streamConsumer.ConsumeCodePoint();
+            case CharacterTabulation:
+            case LineFeed:
+            case FormFeed:
+            case Space:
+                return; // ignore
+            case GreaterThanSign:
+                SwitchTo(Data);
+                Emit(GetDoctypeToken());
+                return;
+            case QuotationMark:
                 _docTypeTokenBuilder.SetSystemIdentifierPresent();
-                _parserState = TokenParserState.DoctypeSystemIdentifierDoubleQuoted;
-                return null;
-            case CharacterReference.Apostrophe:
-                _streamConsumer.ConsumeCodePoint();
+                SwitchTo(DoctypeSystemIdentifierDoubleQuoted);
+                return;
+            case Apostrophe:
                 _docTypeTokenBuilder.SetSystemIdentifierPresent();
-                _parserState = TokenParserState.DoctypeSystemIdentifierSingleQuoted;
-                return null;
+                SwitchTo(DoctypeSystemIdentifierSingleQuoted);
+                return;
+            case var _ when !success:
+                _docTypeTokenBuilder.SetForceQuirks();
+                Emit(GetDoctypeToken(), new EndOfFileToken());
+                return;
             default:
                 _docTypeTokenBuilder.SetForceQuirks();
-                _parserState = TokenParserState.BogusDoctype;
-                return null;
+                ReconsumeIn(BogusDoctype);
+                return;
         }
     }
     
-    private HtmlToken? GetTokenFrom63AfterDoctypeSystemKeywordState()
+    private void GetTokenFrom63AfterDoctypeSystemKeywordState()
     {
-        var (success, codePoint) = _streamConsumer.TryGetCurrentCodePoint();
-
-        if (!success)
-        {
-            _docTypeTokenBuilder.SetForceQuirks();
-            _parserState = TokenParserState.Data; // so the next token is EOF
-            return GetDoctypeToken();
-        }
+        var (success, codePoint) = ConsumeNextInputCharacter();
         
         switch (codePoint.Value)
         {
-            case CharacterReference.CharacterTabulation:
-            case CharacterReference.LineFeed:
-            case CharacterReference.FormFeed:
-            case CharacterReference.Space:
-                _streamConsumer.ConsumeCodePoint();
-                _parserState = TokenParserState.BeforeDoctypeSystemIdentifier;
-                return null;
-            case CharacterReference.QuotationMark:
-                _streamConsumer.ConsumeCodePoint();
+            case CharacterTabulation:
+            case LineFeed:
+            case FormFeed:
+            case Space:
+                SwitchTo(BeforeDoctypeSystemIdentifier);
+                return;
+            case QuotationMark:
                 _docTypeTokenBuilder.SetSystemIdentifierPresent();
-                _parserState = TokenParserState.DoctypeSystemIdentifierDoubleQuoted;
-                return null;
-            case CharacterReference.Apostrophe:
-                _streamConsumer.ConsumeCodePoint();
+                SwitchTo(DoctypeSystemIdentifierDoubleQuoted);
+                return;
+            case Apostrophe:
                 _docTypeTokenBuilder.SetSystemIdentifierPresent();
-                _parserState = TokenParserState.DoctypeSystemIdentifierSingleQuoted;
-                return null;
-            case CharacterReference.GreaterThanSign:
-                _streamConsumer.ConsumeCodePoint();
+                SwitchTo(DoctypeSystemIdentifierSingleQuoted);
+                return;
+            case GreaterThanSign:
                 _docTypeTokenBuilder.SetForceQuirks();
-                _parserState = TokenParserState.Data;
-                return GetDoctypeToken();
+                SwitchTo(Data);
+                Emit(GetDoctypeToken());
+                return;
+            case var _ when !success:
+                _docTypeTokenBuilder.SetForceQuirks();
+                Emit(GetDoctypeToken(), new EndOfFileToken());
+                return;
             default:
                 _docTypeTokenBuilder.SetForceQuirks();
-                _parserState = TokenParserState.BogusDoctype;
-                return null;
+                ReconsumeIn(BogusDoctype);
+                return;
         }
     }
     
-    private HtmlToken? GetTokenFrom64BeforeDoctypeSystemIdentifierState()
+    private void GetTokenFrom64BeforeDoctypeSystemIdentifierState()
     {
-        var (success, codePoint) = _streamConsumer.TryGetCurrentCodePoint();
-
-        if (!success)
-        {
-            _docTypeTokenBuilder.SetForceQuirks();
-            _parserState = TokenParserState.Data; // so the next token is EOF
-            return GetDoctypeToken();
-        }
+        var (success, codePoint) = ConsumeNextInputCharacter();
         
         switch (codePoint.Value)
         {
-            case CharacterReference.CharacterTabulation:
-            case CharacterReference.LineFeed:
-            case CharacterReference.FormFeed:
-            case CharacterReference.Space:
-                _streamConsumer.ConsumeCodePoint();
-                return null;
-            case CharacterReference.QuotationMark:
-                _streamConsumer.ConsumeCodePoint();
+            case CharacterTabulation:
+            case LineFeed:
+            case FormFeed:
+            case Space:
+                return; // ignore
+            case QuotationMark:
                 _docTypeTokenBuilder.SetSystemIdentifierPresent();
-                _parserState = TokenParserState.DoctypeSystemIdentifierDoubleQuoted;
-                return null;
-            case CharacterReference.Apostrophe:
-                _streamConsumer.ConsumeCodePoint();
+                SwitchTo(DoctypeSystemIdentifierDoubleQuoted);
+                return;
+            case Apostrophe:
                 _docTypeTokenBuilder.SetSystemIdentifierPresent();
-                _parserState = TokenParserState.DoctypeSystemIdentifierSingleQuoted;
-                return null;
-            case CharacterReference.GreaterThanSign:
-                _streamConsumer.ConsumeCodePoint();
+                SwitchTo(DoctypeSystemIdentifierSingleQuoted);
+                return;
+            case GreaterThanSign:
                 _docTypeTokenBuilder.SetForceQuirks();
-                _parserState = TokenParserState.Data;
-                return GetDoctypeToken();
+                SwitchTo(Data);
+                Emit(GetDoctypeToken());
+                return;
+            case var _ when !success:
+                _docTypeTokenBuilder.SetForceQuirks();
+                Emit(GetDoctypeToken(), new EndOfFileToken());
+                return;
             default:
                 _docTypeTokenBuilder.SetForceQuirks();
-                _parserState = TokenParserState.BogusDoctype;
-                return null;
+                ReconsumeIn(BogusDoctype);
+                return;
         }
     }
     
-    private HtmlToken? GetTokenFrom65DoctypeSystemIdentifierDoubleQuotedState()
+    private void GetTokenFrom65DoctypeSystemIdentifierDoubleQuotedState()
     {
-        var (success, codePoint) = _streamConsumer.TryGetCurrentCodePoint();
-
-        if (!success)
-        {
-            _docTypeTokenBuilder.SetForceQuirks();
-            _parserState = TokenParserState.Data; // so the next token is EOF
-            return GetDoctypeToken();
-        }
+        var (success, codePoint) = ConsumeNextInputCharacter();
         
         switch (codePoint.Value)
         {
-            case CharacterReference.QuotationMark:
-                _streamConsumer.ConsumeCodePoint();
-                _parserState = TokenParserState.AfterDoctypeSystemIdentifier;
-                return null;
-            case CharacterReference.Null:
-                _streamConsumer.ConsumeCodePoint();
+            case QuotationMark:
+                SwitchTo(AfterDoctypeSystemIdentifier);
+                return;
+            case Null:
                 _docTypeTokenBuilder.AppendToSystemIdentifier(UnicodeCodePoint.ReplacementCharacter);
-                return null;
-            case CharacterReference.GreaterThanSign:
-                _streamConsumer.ConsumeCodePoint();
+                return;
+            case GreaterThanSign:
                 _docTypeTokenBuilder.SetForceQuirks();
-                _parserState = TokenParserState.Data;
-                return GetDoctypeToken();
+                SwitchTo(Data);
+                Emit(GetDoctypeToken());
+                return;
+            case var _ when !success:
+                _docTypeTokenBuilder.SetForceQuirks();
+                Emit(GetDoctypeToken(), new EndOfFileToken());
+                return;
             default:
-                _streamConsumer.ConsumeCodePoint();
                 _docTypeTokenBuilder.AppendToSystemIdentifier(codePoint);
-                return null;
+                return;
         }
     }
     
-    private HtmlToken? GetTokenFrom66DoctypeSystemIdentifierSingleQuotedState()
+    private void GetTokenFrom66DoctypeSystemIdentifierSingleQuotedState()
     {
-        var (success, codePoint) = _streamConsumer.TryGetCurrentCodePoint();
-
-        if (!success)
-        {
-            _docTypeTokenBuilder.SetForceQuirks();
-            _parserState = TokenParserState.Data; // so the next token is EOF
-            return GetDoctypeToken();
-        }
+        var (success, codePoint) = ConsumeNextInputCharacter();
         
         switch (codePoint.Value)
         {
-            case CharacterReference.Apostrophe:
-                _streamConsumer.ConsumeCodePoint();
-                _parserState = TokenParserState.AfterDoctypeSystemIdentifier;
-                return null;
-            case CharacterReference.Null:
-                _streamConsumer.ConsumeCodePoint();
+            case Apostrophe:
+                SwitchTo(AfterDoctypeSystemIdentifier);
+                return;
+            case Null:
                 _docTypeTokenBuilder.AppendToSystemIdentifier(UnicodeCodePoint.ReplacementCharacter);
-                return null;
-            case CharacterReference.GreaterThanSign:
-                _streamConsumer.ConsumeCodePoint();
+                return;
+            case GreaterThanSign:
                 _docTypeTokenBuilder.SetForceQuirks();
-                _parserState = TokenParserState.Data;
-                return GetDoctypeToken();
+                SwitchTo(Data);
+                Emit(GetDoctypeToken());
+                return;
+            case var _ when !success:
+                _docTypeTokenBuilder.SetForceQuirks();
+                Emit(GetDoctypeToken(), new EndOfFileToken());
+                return;
             default:
-                _streamConsumer.ConsumeCodePoint();
                 _docTypeTokenBuilder.AppendToSystemIdentifier(codePoint);
-                return null;
+                return;
         }
     }
     
-    private HtmlToken? GetTokenFrom67AfterDoctypeSystemIdentifierState()
+    private void GetTokenFrom67AfterDoctypeSystemIdentifierState()
     {
-        var (success, codePoint) = _streamConsumer.TryGetCurrentCodePoint();
-
-        if (!success)
-        {
-            _docTypeTokenBuilder.SetForceQuirks();
-            _parserState = TokenParserState.Data; // so the next token is EOF
-            return GetDoctypeToken();
-        }
+        var (success, codePoint) = ConsumeNextInputCharacter();
         
         switch (codePoint.Value)
         {
-            case CharacterReference.CharacterTabulation:
-            case CharacterReference.LineFeed:
-            case CharacterReference.FormFeed:
-            case CharacterReference.Space:
-                _streamConsumer.ConsumeCodePoint();
-                return null;
-            case CharacterReference.GreaterThanSign:
-                _streamConsumer.ConsumeCodePoint();
-                _parserState = TokenParserState.Data;
-                return GetDoctypeToken();
+            case CharacterTabulation:
+            case LineFeed:
+            case FormFeed:
+            case Space:
+                return; // ignore
+            case GreaterThanSign:
+                SwitchTo(Data);
+                Emit(GetDoctypeToken());
+                return;
+            case var _ when !success:
+                _docTypeTokenBuilder.SetForceQuirks();
+                Emit(GetDoctypeToken(), new EndOfFileToken());
+                return;
             default:
-                _parserState = TokenParserState.BogusDoctype;
-                return null;
+                ReconsumeIn(BogusDoctype);
+                return;
         }
     }
     
-    private HtmlToken? GetTokenFrom68BogusDoctypeState()
+    private void GetTokenFrom68BogusDoctypeState()
     {
-        var (success, codePoint) = _streamConsumer.TryGetCurrentCodePoint();
+        var (success, codePoint) = ConsumeNextInputCharacter();
 
-        if (!success)
-        {
-            _parserState = TokenParserState.Data; // so the next token is EOF
-            return GetDoctypeToken();
-        }
-        
         switch (codePoint.Value)
         {
-            case CharacterReference.GreaterThanSign:
-                _streamConsumer.ConsumeCodePoint();
-                _parserState = TokenParserState.Data;
-                return GetDoctypeToken();
-            case CharacterReference.Null:
-                _streamConsumer.ConsumeCodePoint();
-                return null;
+            case GreaterThanSign:
+                SwitchTo(Data);
+                Emit(GetDoctypeToken());
+                return;
+            case Null:
+                return; // ignore
+            case var _ when !success:
+                Emit(GetDoctypeToken(), new EndOfFileToken());
+                return;
             default:
-                _streamConsumer.ConsumeCodePoint();
-                return null;
+                return; // ignore
         }
     }
 
-    private HtmlToken? GetTokenFrom72CharacterReferenceState()
+    private void GetTokenFrom72CharacterReferenceState()
     {
         _temporaryBuffer = new List<UnicodeCodePoint>();
-        _temporaryBuffer.Add(new UnicodeCodePoint(CharacterReference.Ampersand));
+        _temporaryBuffer.Add(new UnicodeCodePoint(Ampersand));
         
-        var (success, codePoint) = _streamConsumer.TryGetCurrentCodePoint();
-
-        if (!success)
-        {
-            FlushCodePointsConsumedAsACharacterReference();
-            _parserState = _returnState;
-            return null;
-        }
+        var (_, codePoint) = ConsumeNextInputCharacter();
 
         switch (codePoint.Value)
         {
             case var _ when CharacterRangeReference.AsciiAlphaNumeric.Contains(codePoint):
-                _parserState = TokenParserState.NamedCharacterReference;
-                return null;
-            case CharacterReference.NumberSign:
-                _streamConsumer.ConsumeCodePoint();
+                ReconsumeIn(NamedCharacterReference);
+                return;
+            case NumberSign:
                 _temporaryBuffer.Add(codePoint);
-                _parserState = TokenParserState.NumericCharacterReference;
-                return null;
+                SwitchTo(NumericCharacterReference);
+                return;
             default:
                 FlushCodePointsConsumedAsACharacterReference();
-                _parserState = _returnState;
-                return null;
+                ReconsumeIn(_returnState);
+                return;
         }
     }
 
-    private HtmlToken? GetTokenFrom73NamedCharacterReferenceState()
+    private void GetTokenFrom73NamedCharacterReferenceState()
     {
-        var partialName = new string(new[] { CharacterReference.Ampersand });
+        var partialName = new string(new[] { Ampersand });
         var matchingNames = NamedEntityReference.Entities.Keys.Where(k => k.StartsWith(partialName, StringComparison.Ordinal)).ToArray();
         string? match = null;
         
         while (matchingNames.Length > 1)
         {
-            var (success, result) = _streamConsumer.LookAhead(partialName.Length);
+            var (success, result) = LookAhead(partialName.Length, true);
             if (!success)
             {
                 matchingNames = Array.Empty<string>();
                 break;
             }
 
-            partialName = CharacterReference.Ampersand + result;
+            partialName = Ampersand + result;
             matchingNames = NamedEntityReference.Entities.Keys.Where(k => k.StartsWith(partialName, StringComparison.Ordinal)).ToArray();
             if (matchingNames.Contains(partialName))
             {
@@ -1511,8 +1280,8 @@ internal class HtmlTokenGenerator
         if (matchingNames.Length == 1 && (match is null || match != matchingNames[0]))
         {
             var possibleMatch = matchingNames[0];
-            var (success, result) = _streamConsumer.LookAhead(possibleMatch.Length - 1);
-            if (success && possibleMatch == CharacterReference.Ampersand + result)
+            var (success, result) = LookAhead(possibleMatch.Length - 1, true);
+            if (success && possibleMatch == Ampersand + result)
             {
                 match = possibleMatch;
             }
@@ -1521,13 +1290,13 @@ internal class HtmlTokenGenerator
         if (match is not null)
         {
             var historical = false;
-            if (ConsumedAsPartOfAnAttribute() && match[^1] != CharacterReference.SemiColon)
+            if (ConsumedAsPartOfAnAttribute() && match[^1] != SemiColon)
             {
-                var (success, result) = _streamConsumer.LookAhead(match.Length);
+                var (success, result) = LookAhead(match.Length, true);
                 if (success)
                 {
                     var nextInputChar = result[^1];
-                    historical = nextInputChar == CharacterReference.EqualsSign || CharacterRangeReference.AsciiAlphaNumeric.Contains(new UnicodeCodePoint(nextInputChar));
+                    historical = nextInputChar == EqualsSign || CharacterRangeReference.AsciiAlphaNumeric.Contains(new UnicodeCodePoint(nextInputChar));
                 }
             }
 
@@ -1539,184 +1308,134 @@ internal class HtmlTokenGenerator
             {
                 _temporaryBuffer = NamedEntityReference.Entities[match].CodePoints.Select(c => new UnicodeCodePoint(c)).ToList();
             }
+
+            ConsumeLookAhead(match.Length - 1); 
             
-            _streamConsumer.ConsumeCodePoint(match.Length - 1);
-            
-            _parserState = _returnState;
+            SwitchTo(_returnState);
         }
         else
         {
-            _parserState = TokenParserState.AmbiguousAmpersand;
+            SwitchTo(AmbiguousAmpersand);
         }
 
         FlushCodePointsConsumedAsACharacterReference();
-        return null;
     }
 
-    private HtmlToken? GetTokenFrom74AmbiguousAmpersandState()
+    private void GetTokenFrom74AmbiguousAmpersandState()
     {
-        var (success, codePoint) = _streamConsumer.TryGetCurrentCodePoint();
-
-        if (!success)
-        {
-            _parserState = _returnState;
-            return null;
-        }
+        var (_, codePoint) = ConsumeNextInputCharacter();
 
         switch (codePoint.Value)
         {
             case var _ when CharacterRangeReference.AsciiAlphaNumeric.Contains(codePoint):
-                _streamConsumer.ConsumeCodePoint();
-                
                 if (ConsumedAsPartOfAnAttribute())
-                {
                     _tagTokenBuilder.AppendToAttributeValue(codePoint);
-                    return null;
-                }
-
-                return new CharacterToken { Data = codePoint.ToString() };
-            case CharacterReference.SemiColon:
-                _parserState = _returnState;
-                return null;
+                else 
+                    Emit(new CharacterToken { Data = codePoint.ToString() });
+                return;
+            case SemiColon:
+                ReconsumeIn(_returnState);
+                return;
             default:
-                _parserState = _returnState;
-                return null;
+                ReconsumeIn(_returnState);
+                return;
         }
     }
     
-    private HtmlToken? GetTokenFrom75NumericCharacterReferenceState()
+    private void GetTokenFrom75NumericCharacterReferenceState()
     {
         _characterReferenceCode = 0;
         
-        var (success, codePoint) = _streamConsumer.TryGetCurrentCodePoint();
-
-        if (!success)
-        {
-            _parserState = TokenParserState.DecimalCharacterReferenceStart;
-            return null;
-        }
+        var (_, codePoint) = ConsumeNextInputCharacter();
 
         switch (codePoint.Value)
         {
-            case CharacterReference.LowerCaseX:
-            case CharacterReference.UpperCaseX:
-                _streamConsumer.ConsumeCodePoint();
+            case LowerCaseX:
+            case UpperCaseX:
                 _temporaryBuffer.Add(codePoint);
-                _parserState = TokenParserState.HexadecimalCharacterReferenceStart;
-                return null;
+                SwitchTo(HexadecimalCharacterReferenceStart);
+                return;
             default:
-                _parserState = TokenParserState.DecimalCharacterReferenceStart;
-                return null;
+                ReconsumeIn(DecimalCharacterReferenceStart);
+                return;
         }
     }
     
-    private HtmlToken? GetTokenFrom76HexadecimalCharacterReferenceStartState()
+    private void GetTokenFrom76HexadecimalCharacterReferenceStartState()
     {
-        var (success, codePoint) = _streamConsumer.TryGetCurrentCodePoint();
-
-        if (!success)
-        {
-            FlushCodePointsConsumedAsACharacterReference();
-            _parserState = _returnState;
-            return null;
-        }
+        var (_, codePoint) = ConsumeNextInputCharacter();
 
         switch (codePoint.Value)
         {
             case var _ when CharacterRangeReference.AsciiHex.Contains(codePoint):
-                _parserState = TokenParserState.HexadecimalCharacterReference;
-                return null;
+                ReconsumeIn(HexadecimalCharacterReference);
+                return;
             default:
                 FlushCodePointsConsumedAsACharacterReference();
-                _parserState = _returnState;
-                return null;
+                ReconsumeIn(_returnState);
+                return;
         }
     }
     
-    private HtmlToken? GetTokenFrom77DecimalCharacterReferenceStartState()
+    private void GetTokenFrom77DecimalCharacterReferenceStartState()
     {
-        var (success, codePoint) = _streamConsumer.TryGetCurrentCodePoint();
-
-        if (!success)
+        var (_, codePoint) = ConsumeNextInputCharacter();
+        
+        switch (codePoint.Value)
         {
-            FlushCodePointsConsumedAsACharacterReference();
-            _parserState = _returnState;
-            return null;
+            case var _ when CharacterRangeReference.AsciiDigit.Contains(codePoint):
+                ReconsumeIn(DecimalCharacterReference);
+                return;
+            default:
+                FlushCodePointsConsumedAsACharacterReference();
+                ReconsumeIn(_returnState);
+                return;
         }
+    }
+    
+    private void GetTokenFrom78HexadecimalCharacterReferenceState()
+    {
+        var (_, codePoint) = ConsumeNextInputCharacter();
 
         switch (codePoint.Value)
         {
             case var _ when CharacterRangeReference.AsciiDigit.Contains(codePoint):
-                _parserState = TokenParserState.DecimalCharacterReference;
-                return null;
-            default:
-                FlushCodePointsConsumedAsACharacterReference();
-                _parserState = _returnState;
-                return null;
-        }
-    }
-    
-    private HtmlToken? GetTokenFrom78HexadecimalCharacterReferenceState()
-    {
-        var (success, codePoint) = _streamConsumer.TryGetCurrentCodePoint();
-
-        if (!success)
-        {
-            _parserState = TokenParserState.NumericCharacterReferenceEnd;
-            return null;
-        }
-
-        switch (codePoint.Value)
-        {
-            case var _ when CharacterRangeReference.AsciiDigit.Contains(codePoint):
-                _streamConsumer.ConsumeCodePoint();
                 ShiftAndIncrementCharacterReferenceCode(16, codePoint.Value - 0x30);
-                return null;
+                return;
             case var _ when CharacterRangeReference.AsciiUpperHexLetter.Contains(codePoint):
-                _streamConsumer.ConsumeCodePoint();
                 ShiftAndIncrementCharacterReferenceCode(16, codePoint.Value - 0x37);
-                return null;
+                return;
             case var _ when CharacterRangeReference.AsciiLowerHexLetter.Contains(codePoint):
-                _streamConsumer.ConsumeCodePoint();
                 ShiftAndIncrementCharacterReferenceCode(16, codePoint.Value - 0x57);
-                return null;
-            case CharacterReference.SemiColon:
-                _streamConsumer.ConsumeCodePoint();
-                _parserState = TokenParserState.NumericCharacterReferenceEnd;
-                return null;
+                return;
+            case SemiColon:
+                SwitchTo(NumericCharacterReferenceEnd);
+                return;
             default:
-                _parserState = TokenParserState.NumericCharacterReferenceEnd;
-                return null;
+                ReconsumeIn(NumericCharacterReferenceEnd);
+                return;
         }
     }
     
-    private HtmlToken? GetTokenFrom79DecimalCharacterReferenceState()
+    private void GetTokenFrom79DecimalCharacterReferenceState()
     {
-        var (success, codePoint) = _streamConsumer.TryGetCurrentCodePoint();
-
-        if (!success)
-        {
-            _parserState = TokenParserState.NumericCharacterReferenceEnd;
-            return null;
-        }
+        var (_, codePoint) = ConsumeNextInputCharacter();
 
         switch (codePoint.Value)
         {
             case var _ when CharacterRangeReference.AsciiDigit.Contains(codePoint):
-                _streamConsumer.ConsumeCodePoint();
                 ShiftAndIncrementCharacterReferenceCode(10, codePoint.Value - 0x30);
-                return null;
-            case CharacterReference.SemiColon:
-                _streamConsumer.ConsumeCodePoint();
-                _parserState = TokenParserState.NumericCharacterReferenceEnd;
-                return null;
+                return;
+            case SemiColon:
+                SwitchTo(NumericCharacterReferenceEnd);
+                return;
             default:
-                _parserState = TokenParserState.NumericCharacterReferenceEnd;
-                return null;
+                ReconsumeIn(NumericCharacterReferenceEnd);
+                return;
         }
     }
     
-    private HtmlToken? GetTokenFrom80NumericCharacterReferenceEndState()
+    private void GetTokenFrom80NumericCharacterReferenceEndState()
     {
         var charRefCodeMap = new Dictionary<int, int>
         {
@@ -1750,15 +1469,15 @@ internal class HtmlTokenGenerator
         };
         if (_characterReferenceCode <= 0)
         {
-            _characterReferenceCode = CharacterReference.ReplacementCharacter;
+            _characterReferenceCode = ReplacementCharacter;
         } 
         else if (_characterReferenceCode > UnicodeCodePoint.MaxCodePoint)
         {
-            _characterReferenceCode = CharacterReference.ReplacementCharacter;
+            _characterReferenceCode = ReplacementCharacter;
         }
         else if (IsCharacterReferenceCodeSurrogate())
         {
-            _characterReferenceCode = CharacterReference.ReplacementCharacter;
+            _characterReferenceCode = ReplacementCharacter;
         }
         else if (charRefCodeMap.TryGetValue(_characterReferenceCode, out var replacementCodePoint))
         {
@@ -1767,9 +1486,7 @@ internal class HtmlTokenGenerator
 
         _temporaryBuffer = new List<UnicodeCodePoint> { new UnicodeCodePoint(_characterReferenceCode) };
         FlushCodePointsConsumedAsACharacterReference();
-        _parserState = _returnState;
-        
-        return null;
+        SwitchTo(_returnState);
     }
 
     private void CreateNewCommentToken()
@@ -1816,14 +1533,14 @@ internal class HtmlTokenGenerator
         }
         else
         {
-            var tokens = _temporaryBuffer.Select(c => new CharacterToken { Data = c.ToString() });
-            _flushedCharacterTokens.AddRange(tokens);
+            var tokens = _temporaryBuffer.Select(c => new CharacterToken { Data = c.ToString() }).Cast<HtmlToken>().ToArray();
+            Emit(tokens);
         }
     }
 
     private bool ConsumedAsPartOfAnAttribute()
     {
-        return _returnState is TokenParserState.AttributeValueDoubleQuoted or TokenParserState.AttributeValueSingleQuoted or TokenParserState.AttributeValueUnquoted;
+        return _returnState is AttributeValueDoubleQuoted or AttributeValueSingleQuoted or AttributeValueUnquoted;
     }
 
     private void ShiftAndIncrementCharacterReferenceCode(int shift, int increment)
@@ -1838,5 +1555,71 @@ internal class HtmlTokenGenerator
     private bool IsCharacterReferenceCodeSurrogate()
     {
         return _characterReferenceCode is >= 0xD800 and <= 0xDFFF;
+    }
+
+    private void Emit(params HtmlToken[] tokens)
+    {
+        // ReSharper disable once ForCanBeConvertedToForeach - absolutely ensure in order
+        for (var i = 0; i < tokens.Length; i++)
+            _tokensToEmit.Enqueue(tokens[i]);
+    }
+
+    private void SwitchTo(TokenParserState state) => _parserState = state;
+
+    private void SetReturnStateTo(TokenParserState state) => _returnState = state;
+
+    private void ReconsumeIn(TokenParserState state)
+    {
+        _reconsumeFlag = true;
+        SwitchTo(state);
+    }
+
+    private (bool Success, UnicodeCodePoint codePoint) ConsumeNextInputCharacter()
+    {
+        if (_reconsumeFlag)
+        {
+            _reconsumeFlag = false;
+            return _currentCharacter;
+        }
+        
+        _currentCharacter = _streamConsumer.TryGetCurrentCodePoint();
+        _streamConsumer.ConsumeCodePoint();
+
+        return _currentCharacter;
+    }
+
+    private (bool Success, string Result) LookAhead(int codePointCount, bool includeCurrent)
+    {
+        var success = false;
+        var result = "";
+        if (codePointCount < 1)
+            return (success, result);
+        
+        if (includeCurrent)
+            codePointCount--;
+
+        if (codePointCount > 0)
+        {
+            (success, result) = _streamConsumer.LookAhead(codePointCount);
+            if (success && includeCurrent)
+                result = _currentCharacter.CodePoint + result;
+        }
+        else
+        {
+            (success, result) = (_currentCharacter.Success, _currentCharacter.CodePoint.ToString());
+        }
+        
+        return (success, result);
+    }
+
+    private void ConsumeLookAhead(int codePointCount)
+    {
+        if (_reconsumeFlag && codePointCount > 0)
+        {
+            codePointCount--;
+            _reconsumeFlag = false;
+        }
+        if (codePointCount > 0)
+            _streamConsumer.ConsumeCodePoint(codePointCount);
     }
 }
