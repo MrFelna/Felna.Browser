@@ -73,7 +73,7 @@ public class Tokenization073NamedCharacterReferenceStateTests
         foreach (var row in NamedEntityReference.Entities)
         {
             var attr = row.Key;
-            if (attr.EndsWith(";", StringComparison.InvariantCulture))
+            if (attr.EndsWith(';'))
                 continue;
 
             var html = $"<p a='{attr}='>"; // realistic example: href='index.html?gt=1'

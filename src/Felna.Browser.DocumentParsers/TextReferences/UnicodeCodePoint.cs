@@ -6,10 +6,8 @@ public readonly struct UnicodeCodePoint : IEquatable<UnicodeCodePoint>
     
     public UnicodeCodePoint(int codePoint)
     {
-        if (codePoint < 0)
-            throw new ArgumentOutOfRangeException(nameof(codePoint));
-        if (codePoint > MaxCodePoint)
-            throw new ArgumentOutOfRangeException(nameof(codePoint));
+        ArgumentOutOfRangeException.ThrowIfNegative(codePoint, nameof(codePoint));
+        ArgumentOutOfRangeException.ThrowIfGreaterThan(codePoint, MaxCodePoint);
         Value = codePoint;
     }
     
