@@ -6,6 +6,8 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Felna.Browser.DocumentParse
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Felna.Browser.DocumentParsers.Tests", "Felna.Browser.DocumentParsers.Tests\Felna.Browser.DocumentParsers.Tests.csproj", "{B0CD236F-9E53-42E3-BE30-FAF4CE39DE52}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Felna.Browser.Parsing.Tokens", "Felna.Browser.Parsing.Tokens\Felna.Browser.Parsing.Tokens.csproj", "{08DD95D0-735E-4F54-9445-DE108945DF62}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -24,5 +26,9 @@ Global
 		{B0CD236F-9E53-42E3-BE30-FAF4CE39DE52}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{B0CD236F-9E53-42E3-BE30-FAF4CE39DE52}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{B0CD236F-9E53-42E3-BE30-FAF4CE39DE52}.Release|Any CPU.Build.0 = Release|Any CPU
+		{08DD95D0-735E-4F54-9445-DE108945DF62}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{08DD95D0-735E-4F54-9445-DE108945DF62}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{08DD95D0-735E-4F54-9445-DE108945DF62}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{08DD95D0-735E-4F54-9445-DE108945DF62}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 EndGlobal

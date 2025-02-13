@@ -1,5 +1,6 @@
 ﻿using System.Text;
 using Felna.Browser.DocumentParsers.TextReferences;
+using Felna.Browser.Parsing.Tokens;
 
 namespace Felna.Browser.DocumentParsers.HtmlTokens;
 

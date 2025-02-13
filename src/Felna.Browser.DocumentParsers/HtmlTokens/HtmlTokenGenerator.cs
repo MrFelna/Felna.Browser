@@ -2,6 +2,7 @@
 using System.Text;
 using Felna.Browser.DocumentParsers.StreamConsumers;
 using Felna.Browser.DocumentParsers.TextReferences;
+using Felna.Browser.Parsing.Tokens;
 using static Felna.Browser.DocumentParsers.HtmlTokens.TokenParserState;
 using static Felna.Browser.DocumentParsers.TextReferences.CharacterReference;
 

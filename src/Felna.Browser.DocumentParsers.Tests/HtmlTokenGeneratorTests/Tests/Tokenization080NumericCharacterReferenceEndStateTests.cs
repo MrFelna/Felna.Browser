@@ -1,4 +1,5 @@
 ﻿using System.Globalization;
+using Felna.Browser.Parsing.Tokens;
 
 namespace Felna.Browser.DocumentParsers.Tests.HtmlTokenGeneratorTests.Tests;
 

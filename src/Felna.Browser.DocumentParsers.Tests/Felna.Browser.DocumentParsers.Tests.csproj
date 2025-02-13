@@ -30,6 +30,7 @@
     <ItemGroup>
       <ProjectReference Include="..\Felna.Browser.DocumentObjectModel\Felna.Browser.DocumentObjectModel.csproj" />
       <ProjectReference Include="..\Felna.Browser.DocumentParsers\Felna.Browser.DocumentParsers.csproj" />
+      <ProjectReference Include="..\Felna.Browser.Parsing.Tokens\Felna.Browser.Parsing.Tokens.csproj" />
     </ItemGroup>
 
 </Project>

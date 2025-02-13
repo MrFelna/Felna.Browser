@@ -1,6 +1,6 @@
-﻿namespace Felna.Browser.DocumentParsers.HtmlTokens;
+﻿namespace Felna.Browser.Parsing.Tokens;
 
-internal class HtmlTokenAttribute
+public class HtmlTokenAttribute
 {
     public string Name { get; set; } = string.Empty;
     
