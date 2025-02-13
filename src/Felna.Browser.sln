@@ -2,8 +2,6 @@
 Microsoft Visual Studio Solution File, Format Version 12.00
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Felna.Browser.DocumentObjectModel", "Felna.Browser.DocumentObjectModel\Felna.Browser.DocumentObjectModel.csproj", "{AB1D5C25-72AA-4744-B721-B5C311AF627F}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Felna.Browser.DocumentParsers.Tests", "Felna.Browser.DocumentParsers.Tests\Felna.Browser.DocumentParsers.Tests.csproj", "{B0CD236F-9E53-42E3-BE30-FAF4CE39DE52}"
-EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Felna.Browser.Parsing.Tokens", "Felna.Browser.Parsing.Tokens\Felna.Browser.Parsing.Tokens.csproj", "{08DD95D0-735E-4F54-9445-DE108945DF62}"
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Felna.Browser.Parsing.Interfaces", "Felna.Browser.Parsing.Interfaces\Felna.Browser.Parsing.Interfaces.csproj", "{5DF82106-40D0-4403-9C19-2A1D760D018C}"
@@ -16,6 +14,12 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Felna.Browser.Parsing.Token
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Felna.Browser.Parsing.DocumentGeneration", "Felna.Browser.Parsing.DocumentGeneration\Felna.Browser.Parsing.DocumentGeneration.csproj", "{5BD435AF-E7D3-4CEE-A6FD-F1D422DACBE9}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Felna.Browser.Parsing.DocumentGeneration.Tests", "Felna.Browser.Parsing.DocumentGeneration.Tests\Felna.Browser.Parsing.DocumentGeneration.Tests.csproj", "{9F68FC24-6F32-47C3-B2D4-C7ABB9E0A72A}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Felna.Browser.Parsing.TokenGeneration.Tests", "Felna.Browser.Parsing.TokenGeneration.Tests\Felna.Browser.Parsing.TokenGeneration.Tests.csproj", "{796D9F88-2E28-4654-8E6E-AA371DCA2896}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Felna.Browser.Parsing.Streams.Tests", "Felna.Browser.Parsing.Streams.Tests\Felna.Browser.Parsing.Streams.Tests.csproj", "{E86DC314-5F8C-4186-A7E2-5D583E293553}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -26,10 +30,6 @@ Global
 		{AB1D5C25-72AA-4744-B721-B5C311AF627F}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{AB1D5C25-72AA-4744-B721-B5C311AF627F}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{AB1D5C25-72AA-4744-B721-B5C311AF627F}.Release|Any CPU.Build.0 = Release|Any CPU
-		{B0CD236F-9E53-42E3-BE30-FAF4CE39DE52}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
-		{B0CD236F-9E53-42E3-BE30-FAF4CE39DE52}.Debug|Any CPU.Build.0 = Debug|Any CPU
-		{B0CD236F-9E53-42E3-BE30-FAF4CE39DE52}.Release|Any CPU.ActiveCfg = Release|Any CPU
-		{B0CD236F-9E53-42E3-BE30-FAF4CE39DE52}.Release|Any CPU.Build.0 = Release|Any CPU
 		{08DD95D0-735E-4F54-9445-DE108945DF62}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
 		{08DD95D0-735E-4F54-9445-DE108945DF62}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{08DD95D0-735E-4F54-9445-DE108945DF62}.Release|Any CPU.ActiveCfg = Release|Any CPU
@@ -54,5 +54,17 @@ Global
 		{5BD435AF-E7D3-4CEE-A6FD-F1D422DACBE9}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{5BD435AF-E7D3-4CEE-A6FD-F1D422DACBE9}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{5BD435AF-E7D3-4CEE-A6FD-F1D422DACBE9}.Release|Any CPU.Build.0 = Release|Any CPU
+		{9F68FC24-6F32-47C3-B2D4-C7ABB9E0A72A}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{9F68FC24-6F32-47C3-B2D4-C7ABB9E0A72A}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{9F68FC24-6F32-47C3-B2D4-C7ABB9E0A72A}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{9F68FC24-6F32-47C3-B2D4-C7ABB9E0A72A}.Release|Any CPU.Build.0 = Release|Any CPU
+		{796D9F88-2E28-4654-8E6E-AA371DCA2896}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{796D9F88-2E28-4654-8E6E-AA371DCA2896}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{796D9F88-2E28-4654-8E6E-AA371DCA2896}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{796D9F88-2E28-4654-8E6E-AA371DCA2896}.Release|Any CPU.Build.0 = Release|Any CPU
+		{E86DC314-5F8C-4186-A7E2-5D583E293553}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{E86DC314-5F8C-4186-A7E2-5D583E293553}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{E86DC314-5F8C-4186-A7E2-5D583E293553}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{E86DC314-5F8C-4186-A7E2-5D583E293553}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 EndGlobal

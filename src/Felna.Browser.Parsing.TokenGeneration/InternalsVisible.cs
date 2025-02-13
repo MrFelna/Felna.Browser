@@ -1,3 +1,3 @@
 ﻿using System.Runtime.CompilerServices;
 
-[assembly:InternalsVisibleTo("Felna.Browser.DocumentParsers.Tests")]
+[assembly:InternalsVisibleTo("Felna.Browser.Parsing.TokenGeneration.Tests")]
