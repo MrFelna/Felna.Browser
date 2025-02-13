@@ -1,7 +1,7 @@
 ﻿using System.Text;
 using Felna.Browser.DocumentObjectModel;
 
-namespace Felna.Browser.DocumentParsers;
+namespace Felna.Browser.Parsing.DocumentGeneration;
 
 public sealed class HtmlParser
 {

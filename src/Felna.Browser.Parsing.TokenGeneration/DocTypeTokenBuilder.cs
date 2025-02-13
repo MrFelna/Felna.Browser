@@ -1,8 +1,8 @@
 ﻿using System.Text;
-using Felna.Browser.DocumentParsers.TextReferences;
+using Felna.Browser.Parsing.Text;
 using Felna.Browser.Parsing.Tokens;
 
-namespace Felna.Browser.DocumentParsers.HtmlTokens;
+namespace Felna.Browser.Parsing.TokenGeneration;
 
 internal class DocTypeTokenBuilder
 {

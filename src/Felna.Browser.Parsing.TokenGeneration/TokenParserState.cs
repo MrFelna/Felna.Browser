@@ -1,4 +1,4 @@
-﻿namespace Felna.Browser.DocumentParsers.HtmlTokens;
+﻿namespace Felna.Browser.Parsing.TokenGeneration;
 
 internal enum TokenParserState
 {

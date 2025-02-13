@@ -1,38 +1,38 @@
-﻿namespace Felna.Browser.DocumentParsers.TextReferences;
+﻿namespace Felna.Browser.Parsing.Text;
 
-internal static class CharacterRangeReference
+public static class CharacterRangeReference
 {
-    internal static readonly ICharacterRange AsciiLowerAlpha = new ContinuousCharacterRange
+    public static readonly ICharacterRange AsciiLowerAlpha = new ContinuousCharacterRange
     {
         LowCharInclusive = CharacterReference.LowerCaseA, 
         HighCharInclusive = CharacterReference.LowerCaseZ
     };
 
-    internal static readonly ICharacterRange AsciiUpperAlpha = new ContinuousCharacterRange
+    public static readonly ICharacterRange AsciiUpperAlpha = new ContinuousCharacterRange
     {
         LowCharInclusive = CharacterReference.UpperCaseA,
         HighCharInclusive = CharacterReference.UpperCaseZ
     };
     
-    internal static readonly ICharacterRange AsciiDigit = new ContinuousCharacterRange
+    public static readonly ICharacterRange AsciiDigit = new ContinuousCharacterRange
     {
         LowCharInclusive = CharacterReference.Digit0,
         HighCharInclusive = CharacterReference.Digit9
     };
 
-    internal static readonly ICharacterRange AsciiUpperHexLetter = new ContinuousCharacterRange
+    public static readonly ICharacterRange AsciiUpperHexLetter = new ContinuousCharacterRange
     {
         LowCharInclusive = CharacterReference.UpperCaseA,
         HighCharInclusive = CharacterReference.UpperCaseF,
     };
 
-    internal static readonly ICharacterRange AsciiLowerHexLetter = new ContinuousCharacterRange
+    public static readonly ICharacterRange AsciiLowerHexLetter = new ContinuousCharacterRange
     {
         LowCharInclusive = CharacterReference.LowerCaseA,
         HighCharInclusive = CharacterReference.LowerCaseF,
     };
 
-    internal static readonly ICharacterRange AsciiHex = new CharacterRange
+    public static readonly ICharacterRange AsciiHex = new CharacterRange
     {
         SubRanges = new ICharacterRange[]
         {
@@ -42,7 +42,7 @@ internal static class CharacterRangeReference
         },
     };
 
-    internal static readonly ICharacterRange AsciiAlpha = new CharacterRange
+    public static readonly ICharacterRange AsciiAlpha = new CharacterRange
     {
         SubRanges = new ICharacterRange[]
         {
@@ -51,7 +51,7 @@ internal static class CharacterRangeReference
         }
     };
     
-    internal static readonly ICharacterRange AsciiAlphaNumeric = new CharacterRange
+    public static readonly ICharacterRange AsciiAlphaNumeric = new CharacterRange
     {
         SubRanges = new ICharacterRange[]
         {
@@ -60,7 +60,7 @@ internal static class CharacterRangeReference
         }
     };
 
-    internal static readonly ICharacterRange TokenWhiteSpace = new IndividualCharacterRange
+    public static readonly ICharacterRange TokenWhiteSpace = new IndividualCharacterRange
     {
         Chars = new int[]
         {
@@ -72,18 +72,18 @@ internal static class CharacterRangeReference
     };
 }
 
-internal interface ICharacterRange
+public interface ICharacterRange
 {
     bool Contains(UnicodeCodePoint c);
 
     bool Contains(int c);
 }
 
-internal class ContinuousCharacterRange : ICharacterRange
+public class ContinuousCharacterRange : ICharacterRange
 {
-    internal required int LowCharInclusive { get; init; }
+    public required int LowCharInclusive { get; init; }
     
-    internal required int HighCharInclusive { get; init; }
+    public required int HighCharInclusive { get; init; }
     
     public bool Contains(int c)
     {
@@ -93,9 +93,9 @@ internal class ContinuousCharacterRange : ICharacterRange
     public bool Contains(UnicodeCodePoint c) => Contains(c.Value);
 }
 
-internal class CharacterRange : ICharacterRange
+public class CharacterRange : ICharacterRange
 {
-    internal required ICharacterRange[] SubRanges { get; init; }
+    public required ICharacterRange[] SubRanges { get; init; }
 
     public bool Contains(int c)
     {
@@ -108,9 +108,9 @@ internal class CharacterRange : ICharacterRange
     }
 }
 
-internal class IndividualCharacterRange : ICharacterRange
+public class IndividualCharacterRange : ICharacterRange
 {
-    internal required int[] Chars { get; init; }
+    public required int[] Chars { get; init; }
 
     public bool Contains(int c) => Chars.Contains(c);
     

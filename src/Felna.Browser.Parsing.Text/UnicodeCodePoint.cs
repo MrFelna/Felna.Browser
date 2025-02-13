@@ -1,4 +1,4 @@
-﻿namespace Felna.Browser.DocumentParsers.TextReferences;
+﻿namespace Felna.Browser.Parsing.Text;
 
 public readonly struct UnicodeCodePoint : IEquatable<UnicodeCodePoint>
 {

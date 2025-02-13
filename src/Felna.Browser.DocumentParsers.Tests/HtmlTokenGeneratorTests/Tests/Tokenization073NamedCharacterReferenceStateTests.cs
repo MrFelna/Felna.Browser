@@ -1,4 +1,4 @@
-﻿using Felna.Browser.DocumentParsers.TextReferences;
+﻿using Felna.Browser.Parsing.Text;
 using Felna.Browser.Parsing.Tokens;
 
 namespace Felna.Browser.DocumentParsers.Tests.HtmlTokenGeneratorTests.Tests;

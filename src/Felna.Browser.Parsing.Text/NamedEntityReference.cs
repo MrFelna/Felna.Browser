@@ -1,7 +1,6 @@
-﻿using System.Reflection;
-using System.Text.Json;
+﻿using System.Text.Json;
 
-namespace Felna.Browser.DocumentParsers.TextReferences;
+namespace Felna.Browser.Parsing.Text;
 
 public static class NamedEntityReference
 {
@@ -9,7 +8,7 @@ public static class NamedEntityReference
     {
         // https://html.spec.whatwg.org/multipage/named-characters.html#named-character-references
         // https://html.spec.whatwg.org/entities.json
-        var manifestResourceName = "Felna.Browser.DocumentParsers.TextReferences.entities.json";
+        var manifestResourceName = "Felna.Browser.Parsing.Text.entities.json";
         var jsonStream = typeof(NamedEntityReference).Assembly.GetManifestResourceStream(manifestResourceName) ?? new MemoryStream();
         var jsonDoc = JsonDocument.Parse(jsonStream);
         var dictionary = new Dictionary<string, (int[] CodePoints, string Characters)>();

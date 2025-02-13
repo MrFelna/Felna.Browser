@@ -1,12 +1,11 @@
-﻿using System.Diagnostics;
-using System.Text;
-using Felna.Browser.DocumentParsers.StreamConsumers;
-using Felna.Browser.DocumentParsers.TextReferences;
+﻿using System.Text;
+using Felna.Browser.Parsing.Interfaces;
+using Felna.Browser.Parsing.Text;
 using Felna.Browser.Parsing.Tokens;
-using static Felna.Browser.DocumentParsers.HtmlTokens.TokenParserState;
-using static Felna.Browser.DocumentParsers.TextReferences.CharacterReference;
+using static Felna.Browser.Parsing.TokenGeneration.TokenParserState;
+using static Felna.Browser.Parsing.Text.CharacterReference;
 
-namespace Felna.Browser.DocumentParsers.HtmlTokens;
+namespace Felna.Browser.Parsing.TokenGeneration;
 
 internal class HtmlTokenGenerator
 {

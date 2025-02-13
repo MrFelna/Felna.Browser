@@ -1,17 +1,17 @@
-﻿namespace Felna.Browser.DocumentParsers.TextReferences;
+﻿namespace Felna.Browser.Parsing.Text;
 
-internal static class StringReference
+public static class StringReference
 {
-    internal const string DocType = "DOCTYPE";
+    public const string DocType = "DOCTYPE";
 
-    internal const string DoubleHyphen = "--";
+    public const string DoubleHyphen = "--";
     
-    internal const string Public = "public";
+    public const string Public = "public";
     
-    internal const string System = "system";
+    public const string System = "system";
 
     // Can this be replaced by string.Equals(x, y, StringComparison.OrdinalIgnoreCase)? 
-    internal static bool AsciiCaseInsensitiveEquals(string x, string y)
+    public static bool AsciiCaseInsensitiveEquals(string x, string y)
     {
         if (x.Length != y.Length)
             return false;

@@ -1,0 +1,14 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+    <PropertyGroup>
+        <TargetFramework>net8.0</TargetFramework>
+        <ImplicitUsings>enable</ImplicitUsings>
+        <Nullable>enable</Nullable>
+    </PropertyGroup>
+
+    <ItemGroup>
+      <ProjectReference Include="..\Felna.Browser.Parsing.Interfaces\Felna.Browser.Parsing.Interfaces.csproj" />
+      <ProjectReference Include="..\Felna.Browser.Parsing.Tokens\Felna.Browser.Parsing.Tokens.csproj" />
+    </ItemGroup>
+
+</Project>

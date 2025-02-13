@@ -1,7 +1,4 @@
-﻿using Felna.Browser.DocumentParsers.StreamConsumers;
-using Felna.Browser.DocumentParsers.TextReferences;
-
-namespace Felna.Browser.DocumentParsers.Tests.HtmlTokenGeneratorTests;
+﻿namespace Felna.Browser.DocumentParsers.Tests.HtmlTokenGeneratorTests;
 
 public class TestStreamConsumer : IStreamConsumer
 {

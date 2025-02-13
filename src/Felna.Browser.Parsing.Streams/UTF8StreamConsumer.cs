@@ -1,7 +1,8 @@
 ﻿using System.Text;
-using Felna.Browser.DocumentParsers.TextReferences;
+using Felna.Browser.Parsing.Interfaces;
+using Felna.Browser.Parsing.Text;
 
-namespace Felna.Browser.DocumentParsers.StreamConsumers;
+namespace Felna.Browser.Parsing.Streams;
 
 internal class UTF8StreamConsumer : IStreamConsumer
 {

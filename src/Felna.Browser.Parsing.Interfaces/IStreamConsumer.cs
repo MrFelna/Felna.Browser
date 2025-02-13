@@ -1,8 +1,8 @@
-﻿using Felna.Browser.DocumentParsers.TextReferences;
+﻿using Felna.Browser.Parsing.Text;
 
-namespace Felna.Browser.DocumentParsers.StreamConsumers;
+namespace Felna.Browser.Parsing.Interfaces;
 
-internal interface IStreamConsumer
+public interface IStreamConsumer
 {
     (bool Success, UnicodeCodePoint CodePoint) TryGetCurrentCodePoint();
     (bool Success, string result) LookAhead(int codePointCount);
